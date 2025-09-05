@@ -47,7 +47,7 @@
         2,
         90
       ],
-      "move_code": "LF000"
+      "move_code": "RF090"
     },
     {
       "type": "ARC",
@@ -65,7 +65,7 @@
         3,
         0
       ],
-      "move_code": "LF000"
+      "move_code": "RF090"
     },
     {
       "type": "FWD",
@@ -124,7 +124,7 @@
         4,
         90
       ],
-      "move_code": "RF000"
+      "move_code": "LF090"
     },
     {
       "type": "FWD",
@@ -158,7 +158,7 @@
         8,
         0
       ],
-      "move_code": "LF000"
+      "move_code": "RF090"
     },
     {
       "type": "FWD",
@@ -192,7 +192,7 @@
         9,
         90
       ],
-      "move_code": "RF000"
+      "move_code": "LF090"
     },
     {
       "type": "ARC",
@@ -210,7 +210,7 @@
         10,
         180
       ],
-      "move_code": "RF000"
+      "move_code": "LF090"
     },
     {
       "type": "FWD",
@@ -269,7 +269,7 @@
         11,
         90
       ],
-      "move_code": "LF000"
+      "move_code": "RF090"
     },
     {
       "type": "FWD",
@@ -303,7 +303,7 @@
         19,
         0
       ],
-      "move_code": "LF000"
+      "move_code": "RF090"
     },
     {
       "type": "FWD",
@@ -337,7 +337,7 @@
         18,
         270
       ],
-      "move_code": "LF000"
+      "move_code": "RF090"
     },
     {
       "type": "FWD",
