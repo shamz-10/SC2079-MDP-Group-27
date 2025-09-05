@@ -646,9 +646,9 @@ def movements_from_path(full_path, breaks, scans_rc, time_limit=TIME_LIMIT_S):
             new_s['move_code'] = f"SB{dist:03d}"
         elif s['type'] == 'ARC':
             if s['direction'] == 'LEFT':
-                new_s['move_code'] = "LF000"
+                new_s['move_code'] = "RF090"
             else:
-                new_s['move_code'] = "RF000"
+                new_s['move_code'] = "LF090"
         steps_out.append(new_s)
 
         # stop exactly at limit
@@ -672,13 +672,18 @@ def movements_from_path(full_path, breaks, scans_rc, time_limit=TIME_LIMIT_S):
     tokens = []
     for s in steps_out:
         if s['type'] == 'FWD':
-            tokens.append(f"{s['cells']}FWD")
+            dist = int(round(s['cells'] * CELL_CM))
+            tokens.append(f"SF{dist:03d}")
         elif s['type'] == 'BWD':
-            tokens.append(f"{s['cells']}BWD")
+            dist = int(round(s['cells'] * CELL_CM))
+            tokens.append(f"SB{dist:03d}")
         elif s['type'] == 'ARC':
-            tokens.append(f"{s['direction']}(ARC90)")
+            if s['direction'] == 'LEFT':
+                tokens.append("RF090(LEFT TURN)")
+            else:
+                tokens.append("LF090(RIGHT TURN)")
         elif s['type'] == 'RECOGNIZE':
-            tokens.append("RECOG")
+            tokens.append("IMAGE_REC")
     token_str = " ".join(tokens)
 
     trace = {
