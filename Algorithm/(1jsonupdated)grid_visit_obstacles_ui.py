@@ -646,9 +646,9 @@ def movements_from_path(full_path, breaks, scans_rc, time_limit=TIME_LIMIT_S):
             new_s['move_code'] = f"SB{dist:03d}"
         elif s['type'] == 'ARC':
             if s['direction'] == 'LEFT':
-                new_s['move_code'] = "RF090"
-            else:
                 new_s['move_code'] = "LF090"
+            else:
+                new_s['move_code'] = "RF090"
         steps_out.append(new_s)
 
         # stop exactly at limit
@@ -656,17 +656,17 @@ def movements_from_path(full_path, breaks, scans_rc, time_limit=TIME_LIMIT_S):
             break
 
     # 5) meta + compact token string
-    meta = {
-        'grid_cells': NCELLS,
-        'cell_cm': CELL_CM,
-        'robot_footprint_cells': ROBOT_FOOTPRINT,
-        'turning_radius_cells': TURNING_RADIUS,
-        'speed_cm_s': SPEED_CM_S,
-        'recognition_time_s': RECOGNITION_TIME_S,
-        'time_limit_s': time_limit,
-        'start_state': full_path[0],
-        'images_total': len([s for s in scans_rc if s is not None]),
-    }
+    # meta = {
+    #     'grid_cells': NCELLS,
+    #     'cell_cm': CELL_CM,
+    #     'robot_footprint_cells': ROBOT_FOOTPRINT,
+    #     'turning_radius_cells': TURNING_RADIUS,
+    #     'speed_cm_s': SPEED_CM_S,
+    #     'recognition_time_s': RECOGNITION_TIME_S,
+    #     'time_limit_s': time_limit,
+    #     'start_state': full_path[0],
+    #     'images_total': len([s for s in scans_rc if s is not None]),
+    # }
 
     # Token string like: "3FWD RIGHT(ARC) 2FWD LEFT(ARC) RECOG ..."
     tokens = []
@@ -679,22 +679,31 @@ def movements_from_path(full_path, breaks, scans_rc, time_limit=TIME_LIMIT_S):
             tokens.append(f"SB{dist:03d}")
         elif s['type'] == 'ARC':
             if s['direction'] == 'LEFT':
-                tokens.append("RF090(LEFT TURN)")
+                tokens.append("LF090")
             else:
-                tokens.append("LF090(RIGHT TURN)")
+                tokens.append("RF090")
         elif s['type'] == 'RECOGNIZE':
             tokens.append("IMAGE_REC")
-    token_str = " ".join(tokens)
+    # token_str = " ".join(tokens)
 
+    path_coords = [[r, c] for (r, c, theta) in full_path]
+
+    # trace = {
+    #     'meta': meta,
+    #     'steps': steps_out,
+    #     'totals': {
+    #         'time_s': round(t, 3),
+    #         'recognized_within_limit': recognized_count,
+    #     }
+    # }
     trace = {
-        'meta': meta,
-        'steps': steps_out,
-        'totals': {
-            'time_s': round(t, 3),
-            'recognized_within_limit': recognized_count,
+        "type": "NAVIGATION",
+        "data": {
+            "commands": tokens,
+            "path": path_coords
         }
     }
-    return trace, token_str
+    return trace, tokens
 
 def save_movement_trace(trace, path="movement_trace.json"):
     with open(path, "w") as f:
@@ -1195,7 +1204,7 @@ def nearest_free_center(blocked, start_rc):
 # =========================
 # Main
 # =========================
-def main(json_file=None):
+def task1(json_file=None):
     def load_obstacles_from_json(path):
         with open(path, "r") as f:
             data = json.load(f)
@@ -1250,4 +1259,4 @@ def main(json_file=None):
 
 if __name__ == "__main__":
 	json_file = sys.argv[1] if len(sys.argv) > 1 else None
-	main(json_file)
+	task1(json_file)
