@@ -7,8 +7,8 @@ import time
 import shutil
 import base64
 
-from image_recognition import model_inference
-from Algorithm.algo import task1  # use algo.py to generate movement_trace.json
+#from image_recognition import model_inference
+from Algorithm import algo  # use algo.py to generate movement_trace.json
 
 # Configuration
 TASK_2 = True  # TODO: Change to False for task 1, True for task 2
@@ -78,15 +78,15 @@ class MovementTraceNavigator:
         Runs algo to regenerate movement_trace.json and prepares segments.
         Expects message like: {"type":"START_TASK","data":{"obstacles_file":"obstacles.json"}}
         """
-        obstacles_path = message.get("data", {}).get("obstacles_file", "obstacles.json")
-        if not os.path.exists(obstacles_path):
-            raise FileNotFoundError(f"'{obstacles_path}' not found.")
+        # obstacles_path = message.get("data", {}).get("obstacles_file", "obstacles.json")
+        # if not os.path.exists(obstacles_path):
+        #     raise FileNotFoundError(f"'{obstacles_path}' not found.")
 
         # This will compute and write movement_trace.json (and show animation)
-        task1(obstacles_path)
+        algo.task1(message)
 
         # Load and prepare segments
-        self._load_trace("movement_trace.json")
+        self._load_trace("../Algorithm/movement_trace.json")
         self._split_into_segments()
 
     def get_command_to_next_obstacle(self):

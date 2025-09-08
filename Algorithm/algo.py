@@ -1204,22 +1204,23 @@ def nearest_free_center(blocked, start_rc):
 # =========================
 # Main
 # =========================
-def task1(json_file=None):
-    def load_obstacles_from_json(path):
-        with open(path, "r") as f:
-            data = json.load(f)
+def task1(json_str=None):
+    def load_obstacles_from_jsonstring(s):
+        data = json.loads(s)
+
         items = []
-        for d in data:
-            r = int(d["row"])
-            c = int(d["col"])
-            side = d["side"].upper()
+        obstacles = data.get("data", {}).get("obstacles", [])
+        for o in obstacles:
+            r = int(o.get("y"))  # y = row
+            c = int(o.get("x"))  # x = col
+            side = str(o.get("side", "N")).upper()
             items.append({"rc": (r, c), "side": side})
         return items
 
     # 1) Place obstacles + sides
-    if json_file:
-        items = load_obstacles_from_json(json_file)
-        print(f"Loaded {len(items)} obstacles from {json_file}")
+    if json_str:
+        items = load_obstacles_from_jsonstring(json_str)
+        print(f"Loaded {len(items)} obstacles from JSON string")
     else:
         placer = InteractivePlacer()
         items = placer.run()
