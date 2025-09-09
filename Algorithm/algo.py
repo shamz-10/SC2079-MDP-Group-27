@@ -12,6 +12,7 @@ from matplotlib.patches import FancyArrow
 from collections import deque
 import json
 import sys
+import os
 
 # =========================
 # Dubins Path Planning Functions
@@ -101,19 +102,11 @@ def _LRL(alpha, beta, d):
 def dubins_path(start_pose, end_pose, turning_radius):
     """
     Calculate Dubins path between two poses.
-    
-    Args:
-        start_pose: (x, y, heading_rad) - starting position and heading in radians
-        end_pose: (x, y, heading_rad) - ending position and heading in radians  
-        turning_radius: minimum turning radius of the robot
-    
-    Returns:
-        (d1, d2, d3, mode) where d1,d2,d3 are segment lengths and mode is the path type
+    Returns (d1, d2, d3, mode) or None.
     """
     x1, y1, theta1 = start_pose
     x2, y2, theta2 = end_pose
     
-    # Transform to standard form
     dx = x2 - x1
     dy = y2 - y1
     d = math.sqrt(dx*dx + dy*dy) / turning_radius
@@ -125,7 +118,6 @@ def dubins_path(start_pose, end_pose, turning_radius):
         alpha = _mod2pi(math.atan2(dy, dx) - theta1)
         beta = _mod2pi(theta2 - math.atan2(dy, dx))
     
-    # Try all six Dubins path types
     paths = [
         _LSL(alpha, beta, d),
         _RSR(alpha, beta, d),
@@ -135,38 +127,24 @@ def dubins_path(start_pose, end_pose, turning_radius):
         _LRL(alpha, beta, d)
     ]
     
-    # Find the shortest valid path
     best_path = None
     best_length = float('inf')
-    
     for path in paths:
         if path[0] is not None:  # Valid path
             total_length = abs(path[0]) + abs(path[1]) + abs(path[2])
             if total_length < best_length:
                 best_length = total_length
                 best_path = path
-    
     return best_path
 
 def dubins_path_cost(start_pose, end_pose, turning_radius, speed):
     """
     Calculate the time cost of a Dubins path.
-    
-    Args:
-        start_pose: (x, y, heading_rad)
-        end_pose: (x, y, heading_rad)
-        turning_radius: minimum turning radius
-        speed: robot speed (units per second)
-    
-    Returns:
-        Time cost in seconds
     """
     path = dubins_path(start_pose, end_pose, turning_radius)
     if path is None:
         return float('inf')
-    
     d1, d2, d3, mode = path
-    # Convert arc lengths to time (arc length * radius / speed)
     total_time = (abs(d1) + abs(d2) + abs(d3)) * turning_radius / speed
     return total_time
 
@@ -178,24 +156,22 @@ CELL_CM = 10.0              # each cell = 10cm
 WORLD_CM = NCELLS * CELL_CM
 
 ROBOT_FOOTPRINT = 3         # robot is 3x3 cells
-# Plan on robot "centers" (grid cells). To be collision-free, the center cell must have all
-# 3x3 footprint cells free. This is equivalent to inflating obstacles by radius=1 cell.
 INFLATE_RADIUS = (ROBOT_FOOTPRINT - 1)//2  # = 1
 
 OB_SIZE_CELLS = 1           # obstacle occupies 1x1 cell
 SCAN_OFFSET_CELLS = 2       # 2 cells = 20cm away from obstacle side
 
-# Start state (row, col, heading°); (0,0) is top-left; rows grow downward.
+# Start state (row, col, heading°); (0,0) is BOTTOM-LEFT; rows grow upward now.
 # Headings are multiples of 90: 0=N, 90=E, 180=S, 270=W
-START_RC = (1, 1, 180)
+START_RC = (1, 1, 0)
 
 # Direction the ROBOT must face to scan a given obstacle side.
 # (row, col) deltas expressed as the **final step into the scan cell**.
 DIR_FOR_SIDE = {
-    'N': ( +1,  0),  # if scanning the North side of an obstacle, robot must face South
-    'S': ( -1,  0),  # face North
-    'E': (  0, -1),  # face West
-    'W': (  0, +1),  # face East
+    'N': (-1,  0),  # face South
+    'S': (+1,  0),  # face North
+    'E': ( 0, -1),  # face West
+    'W': ( 0, +1),  # face East
 }
 
 # =========================
@@ -232,20 +208,16 @@ def inflate_blocked(grid, radius=INFLATE_RADIUS):
 # Scan target generation
 # =========================
 def scan_candidates_for_obstacle_cell(r, c, side, offset=SCAN_OFFSET_CELLS, lateral_span=1):
-    """
-    Create candidate scan cells 'offset' cells away from the chosen side,
-    sampling lateral +/-span cells. Returns a list of (r, c) cells in priority order.
-    """
     side = side.upper()
     cands = []
-    # build offsets like [0, +1, -1, +2, -2, ...]
     lat_offsets = [0] + [d for k in range(1, lateral_span+1) for d in (k, -k)]
+
     if side == 'N':
-        base = (r - offset, c)
+        base = (r + offset, c)   # was r - offset
         for d in lat_offsets:
             cands.append((base[0], base[1] + d))
     elif side == 'S':
-        base = (r + offset, c)
+        base = (r - offset, c)   # was r + offset
         for d in lat_offsets:
             cands.append((base[0], base[1] + d))
     elif side == 'E':
@@ -265,6 +237,12 @@ def scan_candidates_for_obstacle_cell(r, c, side, offset=SCAN_OFFSET_CELLS, late
         if in_bounds(rr, cc) and (rr, cc) not in seen:
             seen.add((rr, cc))
             out.append((rr, cc))
+    # Fallback clamp if empty (edge cases near borders)
+    if not out:
+        rr, cc = base
+        rr = min(max(rr, 0), NCELLS - 1)
+        cc = min(max(cc, 0), NCELLS - 1)
+        out = [(rr, cc)]
     return out
 
 # =========================
@@ -272,31 +250,24 @@ def scan_candidates_for_obstacle_cell(r, c, side, offset=SCAN_OFFSET_CELLS, late
 # =========================
 HEADINGS = [0, 90, 180, 270]
 DIRS = {
-    0: (-1, 0),   # North
-    90: (0, +1),  # East
-    180: (+1, 0), # South
-    270: (0, -1)  # West
+    0: (+1, 0),   # North (row up)
+    90: (0, +1),  # East (col right)
+    180: (-1, 0), # South (row down)
+    270: (0, -1)  # West (col left)
 }
 
 # --- Motion / Time model ---
-# 25 cm min radius @ 10 cm/cell → 2.5 cells. Use 2–3 cells depending on your map.
-TURNING_RADIUS = 2.5   # cells
-
-# Linear speed (same while turning for simplicity)
-SPEED_CM_S = 20.0      # robot linear speed in cm/s (edit as needed)
+TURNING_RADIUS = 2.5   # cells (25 cm @ 10 cm/cell)
+SPEED_CM_S = 20.0      # robot linear speed in cm/s
 
 # Primitive **times** (seconds)
-# forward/back: 1 cell of travel
 FORWARD_COST = CELL_CM / SPEED_CM_S
-BACKWARD_COST = FORWARD_COST * 1.10   # slightly slower reversing (tune or set to 1.0)
-# 90° arc: arc length = π*R/2 cells
+BACKWARD_COST = FORWARD_COST * 1.10
 ARC_COST = (math.pi * TURNING_RADIUS * CELL_CM / 2.0) / SPEED_CM_S
 
-# Recognition & time-limit
-RECOGNITION_TIME_S = 2.0   # dwell time when arriving at each image scan
-TIME_LIMIT_S = 120.0       # total allowed time for the run
+RECOGNITION_TIME_S = 2.0
+TIME_LIMIT_S = 120.0
 
-# Whether to conservatively sample intermediate cells between states for collision checks
 SAMPLE_TRANSITIONS = True
 
 def dir_to_theta(dr, dc):
@@ -310,15 +281,13 @@ def collision_free_cell(r, c, grid_blocked):
 
 def cells_between(a, b):
     """
-    Cheap, conservative sampler of cells traversed from a->b (ignores θ).
-    Steps along the longer axis; sufficient for 1-cell and 2-cell transitions used here.
+    Conservative sampler of cells from a->b (ignores θ).
     """
     (ra, ca, _), (rb, cb, _) = a, b
     r, c = ra, ca
     dr = 1 if rb > ra else (-1 if rb < ra else 0)
     dc = 1 if cb > ca else (-1 if cb < ca else 0)
     cells = []
-    # limit to a small number of steps (<=2) given our primitives
     while (r, c) != (rb, cb):
         if abs(rb - r) >= abs(cb - c):
             r += dr
@@ -364,13 +333,14 @@ def motion_primitives(state):
     # endpoint placed one forward + one lateral cell (discrete proxy of a quarter circle)
     left_end  = (r + dr + dr_l, c + dc + dc_l, theta_l)
     right_end = (r + dr + dr_r, c + dc + dc_r, theta_r)
-    # Calculate Dubins path costs
+
+    # Dubins cost in real-world cm with (0,0) bottom-left
     start_x = c * CELL_CM
-    start_y = (NCELLS - 1 - r) * CELL_CM
+    start_y = r * CELL_CM
     start_theta_rad = math.radians(theta)
     
     left_x = (c + dc + dc_l) * CELL_CM
-    left_y = (NCELLS - 1 - (r + dr + dr_l)) * CELL_CM
+    left_y = (r + dr + dr_l) * CELL_CM
     left_theta_rad = math.radians(theta_l)
     left_cost = dubins_path_cost(
         (start_x, start_y, start_theta_rad),
@@ -380,7 +350,7 @@ def motion_primitives(state):
     )
     
     right_x = (c + dc + dc_r) * CELL_CM
-    right_y = (NCELLS - 1 - (r + dr + dr_r)) * CELL_CM
+    right_y = (r + dr + dr_r) * CELL_CM
     right_theta_rad = math.radians(theta_r)
     right_cost = dubins_path_cost(
         (start_x, start_y, start_theta_rad),
@@ -403,7 +373,7 @@ def _angle_quarters(a_deg):
 def astar(grid_blocked, start, goal_rc, goal_theta=None):
     """
     Optimal A* over (r,c,theta) with primitive **time** costs.
-    Heuristic (admissible & consistent):
+    Heuristic:
       straight-line time lower bound + (#quarter-turns still needed)*ARC_COST.
     """
     sr, sc, stheta = start
@@ -415,7 +385,6 @@ def astar(grid_blocked, start, goal_rc, goal_theta=None):
 
     def h(state):
         r, c, theta = state
-        # optimistic lower bound on time if we could drive straight at SPEED_CM_S
         dist_cells = math.hypot(gr - r, gc - c)
         dist_time = (dist_cells * CELL_CM) / SPEED_CM_S
         if goal_theta is None:
@@ -428,7 +397,6 @@ def astar(grid_blocked, start, goal_rc, goal_theta=None):
         return dist_time + turn_lb
 
     def f_key(g, state):
-        # tiny tie-breaker towards nodes closer to goal, doesn't break optimality
         return g + h(state) + 1e-6 * h(state)
 
     openq = []
@@ -443,14 +411,11 @@ def astar(grid_blocked, start, goal_rc, goal_theta=None):
         _, _, cur = heapq.heappop(openq)
         gcurr = g_cost[cur]
 
-        # closed check with path-improvement reopening
         if cur in closed_best_g and gcurr >= closed_best_g[cur] - 1e-12:
             continue
         closed_best_g[cur] = gcurr
 
-        # goal test
         if (cur[0], cur[1]) == (gr, gc) and (goal_theta is None or cur[2] == goal_theta):
-            # reconstruct
             path = []
             k = cur
             while k is not None:
@@ -458,7 +423,6 @@ def astar(grid_blocked, start, goal_rc, goal_theta=None):
                 k = parent[k]
             return path[::-1]
 
-        # expand
         for nxt, step_cost in motion_primitives(cur):
             if not transition_collision_free(cur, nxt, grid_blocked):
                 continue
@@ -476,8 +440,7 @@ def astar(grid_blocked, start, goal_rc, goal_theta=None):
 # =========================
 def _step_cost(a, b):
     """
-    Determine primitive **time** between two consecutive (r,c,theta) states
-    produced by our motion_primitives: forward/backward, or 90° arc stub.
+    Determine primitive **time** between two consecutive (r,c,theta) states.
     """
     ra, ca, ta = a
     rb, cb, tb = b
@@ -488,12 +451,11 @@ def _step_cost(a, b):
             return FORWARD_COST
         if (dr, dc) == (-fdr, -fdc):
             return BACKWARD_COST
-    # quarter-turn arc: displacement equals sum of the two heading unit vectors
+    # 90° arc
     sumr = DIRS[ta][0] + DIRS[tb][0]
     sumc = DIRS[ta][1] + DIRS[tb][1]
     if ((tb - ta) % 360 in (90, 270)) and (rb - ra, cb - ca) == (sumr, sumc):
         return ARC_COST
-    # Fallback (shouldn't happen with our primitives)
     return FORWARD_COST
 
 def path_cost(states):
@@ -507,13 +469,13 @@ def path_cost(states):
 
 def astar_with_cost(grid_blocked, start, goal_rc, goal_theta=None):
     """
-    Run A* and also return the motion **time** of the segment.
-    Returns (states_list, time_seconds). Empty states => ([], inf)
+    Run A* and return (states_list, time_seconds). Empty states => ([], inf)
     """
     seg = astar(grid_blocked, start, goal_rc, goal_theta)
     if not seg:
         return [], float('inf')
     return seg, path_cost(seg)
+
 def _turn_dir(ta, tb):
     """Return 'RIGHT' if tb = ta+90, 'LEFT' if tb = ta-90, else None."""
     d = (tb - ta) % 360
@@ -525,10 +487,7 @@ def _turn_dir(ta, tb):
 
 def _primitive_from_edge(a, b):
     """
-    Classify a single edge (a->b) from full_path into a primitive:
-      - {'type':'FWD'|'BWD', 'cells':1, ...}
-      - {'type':'ARC', 'direction':'LEFT'|'RIGHT', 'advance_cells':1, 'delta_heading_deg':90, ...}
-    Includes per-step time in 'dt'.
+    Classify a single edge (a->b) from full_path into a primitive.
     """
     ra, ca, ta = a
     rb, cb, tb = b
@@ -543,7 +502,7 @@ def _primitive_from_edge(a, b):
             return {'type':'BWD', 'cells':1, 'dt': BACKWARD_COST,
                     'from': (ra, ca, ta), 'to': (rb, cb, tb)}
 
-    # 90° arc (quarter circle stub)
+    # 90° arc
     tdir = _turn_dir(ta, tb)
     if tdir is not None:
         sumr = DIRS[ta][0] + DIRS[tb][0]
@@ -554,14 +513,13 @@ def _primitive_from_edge(a, b):
                     'dt': ARC_COST,
                     'from': (ra, ca, ta), 'to': (rb, cb, tb)}
 
-    # Fallback: treat as forward 1 cell
+    # Fallback
     return {'type':'FWD', 'cells':1, 'dt': FORWARD_COST,
             'from': (ra, ca, ta), 'to': (rb, cb, tb)}
 
 def _merge_linear_steps(steps):
     """
-    Merge consecutive {'type':'FWD'|'BWD', 'cells':1} into a single step with integer 'cells'.
-    Keep ARC and RECOGNIZE as-is.
+    Merge consecutive FWD/BWD into single steps.
     """
     out = []
     for s in steps:
@@ -570,54 +528,47 @@ def _merge_linear_steps(steps):
             out[-1]['dt'] += s['dt']
             out[-1]['to'] = s['to']
         else:
-            out.append(dict(s))  # shallow copy
+            out.append(dict(s))
     return out
 
 def movements_from_path(full_path, breaks, scans_rc, time_limit=TIME_LIMIT_S):
     """
-    Build a JSON-serializable movement trace:
-      - steps: FWD/BWD (merged), ARC LEFT/RIGHT, and RECOGNIZE dwell events
-      - each step has duration 'dt', and we accumulate 't' (wall time).
-      - we stop at the last frame under the time limit.
-    Returns (trace_dict, token_string).
+    Build a NAVIGATION payload with commands + path.
     """
     if not full_path:
         return {'meta':{}, 'steps':[], 'totals':{}}, ""
 
-    # 1) raw primitives for each edge
+    # 1) raw primitives
     raw = []
     for i in range(len(full_path)-1):
         raw.append(_primitive_from_edge(full_path[i], full_path[i+1]))
 
-    # 2) insert RECOGNIZE events after any index in 'breaks'
+    # 2) insert RECOGNIZE events after indices in 'breaks'
     break_set = set(breaks)
     with_recog = []
     for i, step in enumerate(raw):
         with_recog.append(step)
-        # after applying edge i (which lands at state i+1):
         arrive_idx = i+1
         if arrive_idx in break_set:
             with_recog.append({
                 'type':'RECOGNIZE',
                 'dt': RECOGNITION_TIME_S,
-                'at': full_path[arrive_idx],     # (r,c,theta) of scan cell
+                'at': full_path[arrive_idx],
             })
 
-    # 3) merge linear steps
+    # 3) merge linear
     merged = _merge_linear_steps(with_recog)
 
-    # 4) accumulate wall time, trim at time_limit
+    # 4) accumulate time, trim at limit
     t = 0.0
     steps_out = []
     recognized_count = 0
     for s in merged:
         dt = s['dt']
         if t + dt > time_limit + 1e-9:
-            # partial cut if last step is linear and can be partially executed
             if s['type'] in ('FWD','BWD') and dt > 0:
                 frac = max(0.0, (time_limit - t) / dt)
                 if frac > 1e-6:
-                    # Emit a fractional linear step
                     partial_cells = s['cells'] * frac
                     dist = int(round(partial_cells * CELL_CM))
                     move_code = f"SF{dist:03d}" if s['type'] == 'FWD' else f"SB{dist:03d}"
@@ -630,10 +581,8 @@ def movements_from_path(full_path, breaks, scans_rc, time_limit=TIME_LIMIT_S):
                         'move_code': move_code,
                     })
                     t = time_limit
-            # if ARC or RECOGNIZE we just stop before this step
             break
 
-        # full step fits
         new_s = dict(s)
         t += dt
         if s['type'] == 'RECOGNIZE':
@@ -645,30 +594,12 @@ def movements_from_path(full_path, breaks, scans_rc, time_limit=TIME_LIMIT_S):
             dist = int(round(s['cells'] * CELL_CM))
             new_s['move_code'] = f"SB{dist:03d}"
         elif s['type'] == 'ARC':
-            if s['direction'] == 'LEFT':
-                new_s['move_code'] = "LF090"
-            else:
-                new_s['move_code'] = "RF090"
+            new_s['move_code'] = "LF090" if s['direction'] == 'LEFT' else "RF090"
         steps_out.append(new_s)
 
-        # stop exactly at limit
         if abs(t - time_limit) <= 1e-9:
             break
 
-    # 5) meta + compact token string
-    # meta = {
-    #     'grid_cells': NCELLS,
-    #     'cell_cm': CELL_CM,
-    #     'robot_footprint_cells': ROBOT_FOOTPRINT,
-    #     'turning_radius_cells': TURNING_RADIUS,
-    #     'speed_cm_s': SPEED_CM_S,
-    #     'recognition_time_s': RECOGNITION_TIME_S,
-    #     'time_limit_s': time_limit,
-    #     'start_state': full_path[0],
-    #     'images_total': len([s for s in scans_rc if s is not None]),
-    # }
-
-    # Token string like: "3FWD RIGHT(ARC) 2FWD LEFT(ARC) RECOG ..."
     tokens = []
     for s in steps_out:
         if s['type'] == 'FWD':
@@ -678,24 +609,12 @@ def movements_from_path(full_path, breaks, scans_rc, time_limit=TIME_LIMIT_S):
             dist = int(round(s['cells'] * CELL_CM))
             tokens.append(f"SB{dist:03d}")
         elif s['type'] == 'ARC':
-            if s['direction'] == 'LEFT':
-                tokens.append("LF090")
-            else:
-                tokens.append("RF090")
+            tokens.append("LF090" if s['direction'] == 'LEFT' else "RF090")
         elif s['type'] == 'RECOGNIZE':
             tokens.append("IMAGE_REC")
-    # token_str = " ".join(tokens)
 
-    path_coords = [[r, c] for (r, c, theta) in full_path]
+    path_coords = [[c, r] for (r, c, theta) in full_path]
 
-    # trace = {
-    #     'meta': meta,
-    #     'steps': steps_out,
-    #     'totals': {
-    #         'time_s': round(t, 3),
-    #         'recognized_within_limit': recognized_count,
-    #     }
-    # }
     trace = {
         "type": "NAVIGATION",
         "data": {
@@ -710,7 +629,6 @@ def save_movement_trace(trace, path="movement_trace.json"):
         json.dump(trace, f, indent=2)
     return path
 
-
 # =========================
 # Multi-target routing (Hamiltonian shortest-time via Held–Karp)
 # =========================
@@ -718,8 +636,8 @@ def _scan_goal_for_item(item):
     """From {"rc":(r,c), "side": 'N'|'S'|'E'|'W'} compute (goal_rc, goal_theta, approach_rc)."""
     (r, c) = item["rc"]
     side = item["side"].upper()
-    # central scan cell exactly offset cells away
-    goal_rc = scan_candidates_for_obstacle_cell(r, c, side, offset=SCAN_OFFSET_CELLS, lateral_span=0)[0]
+    cand_list = scan_candidates_for_obstacle_cell(r, c, side, offset=SCAN_OFFSET_CELLS, lateral_span=0)
+    goal_rc = cand_list[0]  # guaranteed non-empty by helper
     dr_req, dc_req = DIR_FOR_SIDE[side]
     goal_theta = dir_to_theta(dr_req, dc_req)
     approach_rc = (goal_rc[0] - dr_req, goal_rc[1] - dc_req)
@@ -728,14 +646,6 @@ def _scan_goal_for_item(item):
 def plan_route_tsp(grid_blocked, start_state, obstacles_with_sides):
     """
     Build a shortest-time Hamiltonian path over image scan goals.
-    - Nodes: the camera-facing scan cells for each obstacle/side (one per item).
-    - Edge weights: A* segment **time** from node i's scan (with its θ) to node j's approach (with j's θ),
-      plus the final step into j's scan cell (FORWARD_COST). Start→j is computed from start_state.
-    Returns:
-        full_path  : concatenated states from start through all scans in optimal order
-        breaks_idx : indices marking arrival to each scan
-        chosen_scans : the scan cell for each obstacle (same order as input list)
-        visit_order : order of obstacle indices actually visited (0..n-1)
     """
     n = len(obstacles_with_sides)
     if n == 0:
@@ -749,7 +659,7 @@ def plan_route_tsp(grid_blocked, start_state, obstacles_with_sides):
 
     # Feasibility: discard nodes whose scan cell or approach is blocked/out-of-bounds
     feasible = []
-    idx_map = []  # map from feasible index -> original index
+    idx_map = []
     for i, nd in enumerate(nodes):
         gr, gc = nd["goal"]
         ar, ac = nd["approach"]
@@ -765,23 +675,21 @@ def plan_route_tsp(grid_blocked, start_state, obstacles_with_sides):
 
     m = len(feasible)
 
-    # Pairwise times between feasible nodes (i->j), and start->j
+    # From start -> each j
     INF = float('inf')
     cost_start = [INF]*m
-    seg_start = [None]*m  # keep the A* states to reconstruct later
+    seg_start = [None]*m
     for j, nd in enumerate(feasible):
         seg, t = astar_with_cost(grid_blocked, start_state, nd["approach"], nd["theta"])
         if seg:
-            cost_start[j] = t + FORWARD_COST  # final step into scan cell
+            cost_start[j] = t + FORWARD_COST
             seg_start[j] = seg
 
+    # i -> j costs
     cost = [[INF]*m for _ in range(m)]
-    # cost segments to reconstruct later
     seg_ij = [[None]*m for _ in range(m)]
-
-    # From node i (at its scan pose) to node j (approach of j with θ_j), i!=j
     for i, ndi in enumerate(feasible):
-        si = (ndi["goal"][0], ndi["goal"][1], ndi["theta"])  # depart from scan i with θ_i
+        si = (ndi["goal"][0], ndi["goal"][1], ndi["theta"])
         for j, ndj in enumerate(feasible):
             if i == j:
                 continue
@@ -790,7 +698,7 @@ def plan_route_tsp(grid_blocked, start_state, obstacles_with_sides):
                 cost[i][j] = t + FORWARD_COST
                 seg_ij[i][j] = seg
 
-    # Held–Karp DP for path starting from "start" and visiting all nodes once
+    # Held–Karp
     dp = { (1<<j, j): (cost_start[j], -1) for j in range(m) }
     for mask in range(1, 1<<m):
         for j in range(m):
@@ -807,7 +715,6 @@ def plan_route_tsp(grid_blocked, start_state, obstacles_with_sides):
                     dp[nk] = (new_cost, j)
 
     full_mask = (1<<m) - 1
-    # pick best end node
     best_end = None
     best_cost = float('inf')
     for j in range(m):
@@ -816,11 +723,9 @@ def plan_route_tsp(grid_blocked, start_state, obstacles_with_sides):
             best_cost = dp[key][0]
             best_end = j
 
-    # If something was unreachable, fall back to greedy by start->j time
     if best_end is None or best_cost == float('inf'):
         order_feas = sorted(range(m), key=lambda j: cost_start[j])
     else:
-        # reconstruct order
         order_feas = []
         mask = full_mask
         j = best_end
@@ -831,7 +736,7 @@ def plan_route_tsp(grid_blocked, start_state, obstacles_with_sides):
             j = pj
         order_feas.reverse()
 
-    # Build the full concatenated path using stored (or recomputed) segments
+    # Build full path
     full_path = [start_state]
     breaks = []
     chosen_scans = [None]*len(obstacles_with_sides)
@@ -840,14 +745,12 @@ def plan_route_tsp(grid_blocked, start_state, obstacles_with_sides):
     cur_state = start_state
     for jf in order_feas:
         nd = feasible[jf]
-        # use stored segment if available
         if cur_state == start_state and seg_start[jf] is not None:
             seg = seg_start[jf]
         else:
             seg, _ = astar_with_cost(grid_blocked, cur_state, nd["approach"], nd["theta"])
             if not seg:
                 continue
-        # ensure approach->scan is collision-free
         final_state = (nd["goal"][0], nd["goal"][1], nd["theta"])
         if not transition_collision_free(seg[-1], final_state, grid_blocked):
             continue
@@ -855,7 +758,6 @@ def plan_route_tsp(grid_blocked, start_state, obstacles_with_sides):
         full_path += seg[1:] + [final_state]
         breaks.append(len(full_path)-1)
 
-        # record mapping back to original obstacle index
         orig_idx = idx_map[jf]
         chosen_scans[orig_idx] = nd["goal"]
         visit_order.append(orig_idx)
@@ -865,26 +767,24 @@ def plan_route_tsp(grid_blocked, start_state, obstacles_with_sides):
     return full_path, breaks, chosen_scans, visit_order
 
 # =========================
-# Drawing helpers
+# Drawing helpers (0,0 at bottom-left)
 # =========================
 def draw_grid(ax):
-    # grid lines
     for r in range(NCELLS+1):
         ax.plot([0, NCELLS], [r, r], '-', lw=0.5, color='0.8', zorder=0)
     for c in range(NCELLS+1):
         ax.plot([c, c], [0, NCELLS], '-', lw=0.5, color='0.8', zorder=0)
-    # border darker
     ax.plot([0, NCELLS, NCELLS, 0, 0], [0, 0, NCELLS, NCELLS, 0], 'k-', lw=1.0, zorder=1)
 
 def cell_center_xy(rc):
     r, c = rc
     x = c + 0.5
-    y = NCELLS - (r + 0.5)  # flip y so row 0 is top
+    y = r + 0.5   # bottom-left origin
     return x, y
 
 def draw_cell_square(ax, rc, color='tab:red', lw=2, alpha=1.0):
     r, c = rc
-    x0, y0 = c, NCELLS - (r+1)
+    x0, y0 = c, r  # bottom-left of the cell
     xs = [x0, x0+1, x0+1, x0, x0]
     ys = [y0, y0, y0+1, y0+1, y0]
     ax.plot(xs, ys, color=color, lw=lw, alpha=alpha)
@@ -893,15 +793,14 @@ def draw_robot_footprint(ax, rc, color='k', lw=2):
     """Draw 3x3 robot footprint centered at rc."""
     r, c = rc
     r0, c0 = r - INFLATE_RADIUS, c - INFLATE_RADIUS
-    x0, y0 = c0, NCELLS - (r0 + ROBOT_FOOTPRINT)
+    x0, y0 = c0, r0
     xs = [x0, x0+ROBOT_FOOTPRINT, x0+ROBOT_FOOTPRINT, x0, x0]
     ys = [y0, y0, y0+ROBOT_FOOTPRINT, y0+ROBOT_FOOTPRINT, y0]
     ax.plot(xs, ys, color=color, lw=lw)
 
 def draw_start_zone(ax):
     """
-    Draw a shaded 3x3 START ZONE centered on START_RC (row,col),
-    clamped to grid, with a label.
+    Draw a shaded 3x3 START ZONE centered on START_RC (row,col).
     """
     sr, sc, _ = START_RC
     r0 = max(0, sr - INFLATE_RADIUS)
@@ -909,18 +808,16 @@ def draw_start_zone(ax):
     r1 = min(NCELLS-1, sr + INFLATE_RADIUS)
     c1 = min(NCELLS-1, sc + INFLATE_RADIUS)
 
-    # convert to plot coords
-    x0, y0 = c0, NCELLS - (r1 + 1)  # top-left in plot coords
+    x0, y0 = c0, r0
     w = (c1 - c0 + 1)
     h = (r1 - r0 + 1)
 
     ax.add_patch(plt.Rectangle((x0, y0), w, h, facecolor='tab:blue', alpha=0.12, edgecolor='tab:blue', lw=1.5))
-    # label near center of start zone (use the declared START_RC center)
     xlab, ylab = cell_center_xy((sr, sc))
     ax.text(xlab, ylab, "START ZONE", color='tab:blue', fontsize=9, ha='center', va='center')
 
 # =========================
-# Animation
+# Animation (compatible with bottom-left origin)
 # =========================
 def animate_path(grid_blocked, obstacles_rc, scans_rc, visit_order, full_path, breaks):
     fig, ax = plt.subplots(figsize=(7,7))
@@ -935,7 +832,7 @@ def animate_path(grid_blocked, obstacles_rc, scans_rc, visit_order, full_path, b
     for rc in obstacles_rc:
         draw_cell_square(ax, rc, color='tab:red', lw=2)
 
-    # Scan targets (already central) + labels
+    # Scan targets + labels
     for i, sp in enumerate(scans_rc):
         if sp is None:
             continue
@@ -971,12 +868,10 @@ def animate_path(grid_blocked, obstacles_rc, scans_rc, visit_order, full_path, b
     )
     ax.add_patch(camera_arrow)
 
-    # HUD text: timer + recognized count
     hud = ax.text(0.02, 0.98, "", transform=ax.transAxes, va='top', ha='left',
                   fontsize=10, color='black',
                   bbox=dict(facecolor='white', alpha=0.8, edgecolor='0.7'))
 
-    # Precompute per-step times and cumulative times (including recognition dwell)
     N = len(full_path)
     step_times = [0.0]*(N-1)
     for i in range(N-1):
@@ -989,7 +884,6 @@ def animate_path(grid_blocked, obstacles_rc, scans_rc, visit_order, full_path, b
         if i in break_set:
             cum_time[i] += RECOGNITION_TIME_S
 
-    # Determine last frame under TIME_LIMIT_S
     last_frame = 0
     for i in range(N):
         if cum_time[i] <= TIME_LIMIT_S + 1e-9:
@@ -997,7 +891,6 @@ def animate_path(grid_blocked, obstacles_rc, scans_rc, visit_order, full_path, b
         else:
             break
 
-    # Precompute recognized count vs frame
     breaks_sorted = sorted(breaks)
     def recognized_count_at(frame_idx):
         cnt = 0
@@ -1009,7 +902,7 @@ def animate_path(grid_blocked, obstacles_rc, scans_rc, visit_order, full_path, b
     def robot_poly(rc):
         r, c = rc
         r0, c0 = r - INFLATE_RADIUS, c - INFLATE_RADIUS
-        x0, y0 = c0, NCELLS - (r0 + ROBOT_FOOTPRINT)
+        x0, y0 = c0, r0
         xs = [x0, x0+ROBOT_FOOTPRINT, x0+ROBOT_FOOTPRINT, x0, x0]
         ys = [y0, y0, y0+ROBOT_FOOTPRINT, y0+ROBOT_FOOTPRINT, y0]
         return xs, ys
@@ -1026,7 +919,6 @@ def animate_path(grid_blocked, obstacles_rc, scans_rc, visit_order, full_path, b
         xs, ys = robot_poly(full_path[frame][:2])
         robot_outline.set_data(xs, ys)
 
-        # update heading arrow
         camera_arrow.remove()
         r, c, theta = full_path[frame]
         x, y = cell_center_xy((r, c))
@@ -1041,15 +933,13 @@ def animate_path(grid_blocked, obstacles_rc, scans_rc, visit_order, full_path, b
         )
         ax.add_patch(camera_arrow)
 
-        # HUD: time + recognized
         t = cum_time[frame]
         recog = recognized_count_at(frame)
         hud.set_text(f"t = {t:0.1f} s   |   recognized: {recog}/{len([s for s in scans_rc if s is not None])}   |   limit = {TIME_LIMIT_S:.0f} s")
 
         return path_line, robot_outline, camera_arrow, hud
 
-    # Limit frames to time limit
-    total_frames = last_frame + 1  # inclusive of last_frame
+    total_frames = last_frame + 1
     ani = animation.FuncAnimation(
         fig, update, frames=total_frames,
         init_func=init, interval=120, blit=True, repeat=False
@@ -1058,7 +948,7 @@ def animate_path(grid_blocked, obstacles_rc, scans_rc, visit_order, full_path, b
     plt.show()
 
 # =========================
-# Click-to-place UI
+# Click-to-place UI (bottom-left origin)
 # =========================
 class InteractivePlacer:
     def __init__(self):
@@ -1109,16 +999,14 @@ class InteractivePlacer:
     def _on_click(self, event):
         if event.inaxes != self.ax or self.done:
             return
-        # map click to cell
         col = int(event.xdata)
-        row_from_bottom = int(event.ydata)
-        r = NCELLS - 1 - row_from_bottom
+        row = int(event.ydata)   # bottom-left origin
+        r = row
         c = col
         if not in_bounds(r, c):
             return
         item = {"rc": (r, c), "side": self.current_side}
         self.items.append(item)
-        # draw obstacle cell and its side marker (a small green dot at the base scan position)
         draw_cell_square(self.ax, item["rc"], color='tab:red', lw=2)
         rr, cc = item["rc"]
         cand = scan_candidates_for_obstacle_cell(rr, cc, item["side"],
@@ -1198,66 +1086,104 @@ def nearest_free_center(blocked, start_rc):
             if not blocked[nr, nc]:
                 return (nr, nc)
             q.append((nr, nc))
-    # If everything is blocked (pathologically), just return the original start
     return start_rc
 
 # =========================
-# Main
+# Main (task1 accepts dict payload)
 # =========================
-def task1(json_str=None):
-    def load_obstacles_from_jsonstring(s):
-        data = json.loads(s)
+def _items_from_payload(payload_dict):
+    """
+    Extract obstacles [{"rc":(r,c), "side":...}, ...] from a START_TASK-like dict.
+    """
+    items = []
+    obstacles = payload_dict.get("data", {}).get("obstacles", [])
+    for o in obstacles:
+        r = int(o.get("y"))  # y = row
+        c = int(o.get("x"))  # x = col
+        side = str(o.get("side", "N")).upper()
+        items.append({"rc": (r, c), "side": side})
+    return items
 
-        items = []
-        obstacles = data.get("data", {}).get("obstacles", [])
-        for o in obstacles:
-            r = int(o.get("y"))  # y = row
-            c = int(o.get("x"))  # x = col
-            side = str(o.get("side", "N")).upper()
-            items.append({"rc": (r, c), "side": side})
-        return items
+def _start_override_from_payload(payload_dict):
+    """
+    Optionally extract robot start (r,c,theta) from payload_dict["data"]["robot"].
+    dir: 'N','E','S','W' -> 0,90,180,270
+    """
+    robot = payload_dict.get("data", {}).get("robot", {})
+    if not robot:
+        return None
+    dir_map = {"N": 0, "E": 90, "S": 180, "W": 270}
+    try:
+        rx = int(robot.get("x"))
+        ry = int(robot.get("y"))
+        rdir = str(robot.get("dir", "N")).upper()
+        return (ry, rx, dir_map.get(rdir, START_RC[2]))
+    except Exception:
+        return None
 
-    # 1) Place obstacles + sides
-    if json_str:
-        items = load_obstacles_from_jsonstring(json_str)
-        print(f"Loaded {len(items)} obstacles from JSON string")
-    else:
+def task1(json_payload=None):
+    """
+    Accepts:
+      - dict  (START_TASK-style payload)
+      - None  (opens interactive placer)
+    Saves movement_trace.json next to this file.
+    """
+    # 1) Obstacles + sides
+    if json_payload is None:
         placer = InteractivePlacer()
         items = placer.run()
-    
+        start_override = None
+    elif isinstance(json_payload, dict):
+        items = _items_from_payload(json_payload)
+        start_override = _start_override_from_payload(json_payload)
+        print(f"Loaded {len(items)} obstacles from dict payload")
+    else:
+        raise TypeError("task1 json_payload must be dict or None")
+
     if not items:
         print("No obstacles placed. Exiting.")
         return
 
-    # 2) Build blocked grid (raw + inflated for 3x3 robot)
+    # 2) Build blocked grid
     obstacles_rc = [it["rc"] for it in items]
     sides = [it["side"] for it in items]
     raw_grid = grid_with_obstacles(obstacles_rc)
     blocked = inflate_blocked(raw_grid, radius=INFLATE_RADIUS)
 
-    # Choose a feasible start cell (auto-relocate if start is blocked)
+    global START_RC
+    # 3) Start state (override allowed) with auto-relocate if blocked
     r, c, theta = START_RC
+    if start_override is not None:
+        r, c, theta = start_override
+        
+        START_RC = (r, c, theta)
+
     if blocked[r, c]:
         new_start = nearest_free_center(blocked, (r, c))
         print(f"Start {(r, c)} is blocked after inflation; using nearest free start {new_start}.")
         r, c = new_start
 
-    # 3) Plan route (Hamiltonian shortest-time + facing constraint)
     start_state = (r, c, theta)
     obstacles_with_sides = [{"rc": rc, "side": s} for rc, s in zip(obstacles_rc, sides)]
     full_path, breaks, scans, order = plan_route_tsp(blocked, start_state, obstacles_with_sides)
 
-    # 4) Build + save movement JSON
+    # 4) Build + save movement JSON (save into Algorithm folder)
     trace, token_str = movements_from_path(full_path, breaks, scans, time_limit=TIME_LIMIT_S)
-    outfile = save_movement_trace(trace, "movement_trace.json")
+    out_dir = os.path.dirname(os.path.abspath(__file__))
+    outfile = save_movement_trace(trace, os.path.join(out_dir, "movement_trace.json"))
     print("\n=== MOVEMENT TOKENS ===")
     print(token_str)
     print(f"\nSaved JSON trace to: {outfile}")
 
-    # 5) Animate (time-limited + recognized counter)
-    animate_path(blocked, obstacles_rc, scans, order, full_path, breaks)
-
+    # 5) Animate if you want a UI (commented for headless use)
+   # animate_path(blocked, obstacles_rc, scans, order, full_path, breaks)
 
 if __name__ == "__main__":
-	json_file = sys.argv[1] if len(sys.argv) > 1 else None
-	task1(json_file)
+    # For manual testing you can still pass a JSON file path and we’ll load & run it.
+    # (Kept for convenience in development.)
+    if len(sys.argv) > 1 and os.path.exists(sys.argv[1]):
+        with open(sys.argv[1], "r") as f:
+            payload = json.load(f)
+        task1(payload)
+    else:
+        task1(None)

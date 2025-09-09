@@ -86,7 +86,7 @@ class MovementTraceNavigator:
         algo.task1(message)
 
         # Load and prepare segments
-        self._load_trace("../Algorithm/movement_trace.json")
+        self._load_trace("Algorithm/movement_trace.json")
         self._split_into_segments()
 
     def get_command_to_next_obstacle(self):
