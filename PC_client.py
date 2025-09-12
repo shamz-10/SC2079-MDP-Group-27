@@ -7,7 +7,7 @@ import time
 import shutil
 import base64
 
-#from image_recognition import model_inference
+from image_recognition import model_inference
 from Algorithm import algo  # use algo.py to generate movement_trace.json
 
 # Configuration
@@ -54,7 +54,7 @@ class MovementTraceNavigator:
             start_path_idx = i_path
 
             # accumulate until IMAGE_REC or end
-            while i_cmd < len(cmds) and cmds[i_cmd] != "IMAGE_REC":
+            while i_cmd < len(cmds) and cmds[i_cmd] != "IMAGE":
                 seg_cmds.append(cmds[i_cmd])
                 i_cmd += 1
                 i_path += 1  # each motion advances to next state
@@ -66,7 +66,7 @@ class MovementTraceNavigator:
                 segments.append({"commands": seg_cmds, "path": seg_path})
 
             # consume IMAGE_REC boundary (don’t move along path)
-            if i_cmd < len(cmds) and cmds[i_cmd] == "IMAGE_REC":
+            if i_cmd < len(cmds) and cmds[i_cmd] == "IMAGE":
                 i_cmd += 1
 
         self.segments = segments
@@ -294,6 +294,29 @@ if __name__ == "__main__":
 
     PC_client_receive.start()
     print("[PC Client] Listening thread started successfully")
+
+
+    # command = {
+    # "type": "NAVIGATION",
+    # "data": {
+    #     "commands": [
+    #         "SF130",
+    #         "RF090",
+    #         "SF060",
+    #         "RF090",
+    #         "SF010",
+    #         "RF090",
+    #         "LF090",
+    #         "RB090",
+    #         "LF090",
+    #         "RF090",
+    #         "SB100",
+    #         "IMAGE"
+    #     ],
+    #     "path": []  # Optionally fill this with the corresponding path if needed
+    #     }
+    # }
+    # client.msg_queue.put(json.dumps(command))
 
     # Optionally join:
     # PC_client_receive.join()
