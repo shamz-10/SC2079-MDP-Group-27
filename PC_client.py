@@ -11,7 +11,7 @@ from image_recognition import model_inference
 from Algorithm import algo  # use algo.py to generate movement_trace.json
 
 # Configuration
-TASK_2 = True  # TODO: Change to False for task 1, True for task 2
+TASK_2 = False  # TODO: Change to False for task 1, True for task 2
 
 # Constants
 RPI_IP = "192.168.27.27"  # Replace with the Raspberry Pi's IP address
@@ -54,10 +54,34 @@ class MovementTraceNavigator:
             start_path_idx = i_path
 
             # accumulate until IMAGE_REC or end
-            while i_cmd < len(cmds) and cmds[i_cmd] != "IMAGE":
-                seg_cmds.append(cmds[i_cmd])
+            while i_cmd < len(cmds):
+                cmd = cmds[i_cmd]
+                seg_cmds.append(cmd)
+                print("cmd appended", cmd)
                 i_cmd += 1
-                i_path += 1  # each motion advances to next state
+
+                if i_cmd < len(cmds) and cmd == "IMAGE":
+                    continue
+
+                # Advance along path according to command semantics
+                # Straight moves are encoded like SB050, SF140 (distance in mm/10)
+                # Rotations like RB080, RF090 do not advance grid position
+                steps = 0
+                if cmd and len(cmd) >= 3 and cmd[0] == 'S':
+                    try:
+                        steps = max(1, int(cmd[2:]) // 10)
+                    except Exception:
+                        steps = 1
+                elif (cmd[0] == 'L' or cmd[0]== 'R'):
+                    steps=1
+                else:
+                    steps = 0
+                
+                print("print cmd, steps:",cmd, steps)
+
+                # Move i_path forward but never past the final state
+                if steps > 0:
+                    i_path = min(i_path + steps, len(path) - 1)
 
             # segment path is states [start..i_path] inclusive
             seg_path = path[start_path_idx:i_path+1] if i_path >= start_path_idx else [path[start_path_idx]]
@@ -66,8 +90,9 @@ class MovementTraceNavigator:
                 segments.append({"commands": seg_cmds, "path": seg_path})
 
             # consume IMAGE_REC boundary (don’t move along path)
-            if i_cmd < len(cmds) and cmds[i_cmd] == "IMAGE":
-                i_cmd += 1
+            # if i_cmd < len(cmds) and cmds[i_cmd] == "IMAGE":
+            #     i_cmd += 1
+
 
         self.segments = segments
         self.segment_idx = 0
@@ -174,7 +199,7 @@ class PCClient:
                 while exception:
                     try:
                         self.client_socket.sendall(self.prepend_msg_size(message))
-                        print("[PC Client] Write to RPI: first 100=", message[:100])
+                        print("[PC Client] Write to RPI: first 100=", message)
                     except Exception as e:
                         print("[PC Client] ERROR: Failed to write to RPI -", str(e))
                         self.reconnect()
@@ -207,7 +232,7 @@ class PCClient:
                     print("[PC Client] PC Server disconnected remotely.")
                     self.reconnect()
 
-                print("[PC Client] Received message: first 100:", message[:100])
+                print("[PC Client] Received message: first 100:", message)
 
                 message = json.loads(message)
 
@@ -248,8 +273,12 @@ class PCClient:
                     else:
                         image_path = f"captured_images/task1_obs_id_{obs_id}_{image_counter}.jpg"
                     
+                    print("Before opening image")
+
                     with open(image_path, "wb") as img_file:
                         img_file.write(decoded_image)
+
+                    print("Before calling image recognition model")
 
                     image_prediction = model_inference.image_inference(
                         image_or_path=image_path,
@@ -261,13 +290,78 @@ class PCClient:
                     image_counter += 1
                     print(image_prediction)
 
-                    # After handling images, if you want to move to next obstacle segment:
-                    # (Uncomment if/when your image flow decides to proceed)
-                    # if not self.t1.has_task_ended():
-                    #     command = self.t1.get_command_to_next_obstacle()
-                    #     obs_id = str(self.t1.get_obstacle_id())
-                    #     if command and command.get("type") == "NAVIGATION":
-                    #         self.msg_queue.put(json.dumps(command))
+                    print("image prediction")
+
+                    if message["final_image"] == True:
+                        
+                        # Get last prediction and move forward
+                        while image_prediction['data']['img_id'] == None and self.image_record is not None:
+                            if self.image_record:
+                                image_prediction = self.image_record.pop()
+                            else:
+                                break
+                        
+                        # If still can't find a prediction, repeat the last command
+                        if image_prediction['data']['img_id'] == None and NUM_OF_RETRIES > retries:
+                            
+                            if command['type'] == 'FASTEST_PATH':
+                                image_prediction['data']['img_id'] = "38" # 38 is right, 39 is left
+                            else:
+                                last_path = command['data']['path'][-1]
+                                if (retries+1)%2==0:
+                                    command = {"type": "NAVIGATION", "data": {"commands": ['RF010','RB010'], "path": [last_path, last_path]}}
+                                else:
+                                    command = {"type": "NAVIGATION", "data": {"commands": ['RB010','RF010'], "path": [last_path, last_path]}}
+
+                            self.msg_queue.put(json.dumps(command))
+                            retries += 1
+                            continue
+                            
+                        # # For checklist A.5
+                        # else:
+                        #     print("[Algo] Find the non-bulleye ended")
+                        #     return
+
+                        # copy image to images_result folder and rename them according to obs_id
+                        destination_folder = "images_result"
+                        os.makedirs(destination_folder, exist_ok=True)
+                        if self.task_2:
+                            destination_file = f"{destination_folder}/task2_result_obs_id_{obs_id}.jpg"
+                        else:
+                            destination_file = f"{destination_folder}/task1_result_obs_id_{obs_id}.jpg"
+                        image_path = image_prediction["image_path"] 
+                        shutil.copy(image_path, destination_file)
+
+                        # Remove unnecessary data
+                        del image_prediction["data"]["bbox_area"]
+                        del image_prediction["image_path"]
+
+                        print("before detection send")
+                        message = json.dumps(image_prediction)
+                        self.msg_queue.put(message)
+                        print("after msg queue put message")
+                        # self.t1.update_image_id(image_prediction['data']['img_id'])
+                        image_counter = 0
+                        retries = 0
+                        if self.task_2:
+                            obs_id += 1 # because PC server doesn't send ID
+
+                        # For testing
+                        # message = {"type": "IMAGE_RESULTS", "data": {"obs_id": "3", "img_id": "20"}}
+                        # end of temp test code
+
+                        # Update self.t1 to input new path, may put this above the image inference if we don't want to wait and stop
+                        # if not self.t1.has_task_ended():
+                        #     command = self.t1.get_command_to_next_obstacle()
+                        #     self.msg_queue.put(json.dumps(command))
+                        #     obs_id = str(self.t1.get_obstacle_id())
+                        # else:
+                        #     if not self.task_2:
+                        #         print("[Algo] Task 1 ended")
+                        #         stitching_images(r'images_result', r'image_recognition\stitched_image.jpg')
+                        #         break # exit thread
+
+                        self.image_record = [] # reset the image record
 
         except socket.error as e:
             print("[PC Client] ERROR:", str(e))
@@ -300,17 +394,10 @@ if __name__ == "__main__":
     # "type": "NAVIGATION",
     # "data": {
     #     "commands": [
-    #         "SF130",
-    #         "RF090",
-    #         "SF060",
-    #         "RF090",
     #         "SF010",
-    #         "RF090",
-    #         "LF090",
-    #         "RB090",
-    #         "LF090",
-    #         "RF090",
-    #         "SB100",
+            
+            
+        
     #         "IMAGE"
     #     ],
     #     "path": []  # Optionally fill this with the corresponding path if needed
@@ -319,6 +406,6 @@ if __name__ == "__main__":
     # client.msg_queue.put(json.dumps(command))
 
     # Optionally join:
-    # PC_client_receive.join()
-    # PC_client_send.join()
-    # client.disconnect()
+    PC_client_receive.join()
+    PC_client_send.join()
+    client.disconnect()

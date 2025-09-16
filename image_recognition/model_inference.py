@@ -7,7 +7,7 @@ from datetime import datetime
 import torch
 
 # Add your model paths here
-TASK_1_V1_MODEL_CONFIG = {"conf":0.803, "path":Path("models") / "v1.pt"}
+TASK_1_V1_MODEL_CONFIG = {"conf":0.803, "path":Path("image_recognition") / "models" /"v3.pt"}
 TASK_1_V2_MODEL_CONFIG = {"conf":0.791, "path":Path("image_recognition") / "runs" / "detect" / "train task_1" / "weights" / "best.pt"}
 TASK_2_MODEL_CONFIG = {"conf":0.868, "path":Path("image_recognition") / "runs" / "detect" / "train task_2" / "weights" / "best.pt"}
 
