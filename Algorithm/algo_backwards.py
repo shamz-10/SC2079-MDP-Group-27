@@ -671,7 +671,7 @@ def movements_from_path(full_path, breaks, scans_rc, time_limit=TIME_LIMIT_S):
         elif s['type'] == 'ARC_BWD':
             tokens.append("LB090" if s['direction'] == 'LEFT' else "RB090")
         elif s['type'] == 'RECOGNIZE':
-            tokens.append("IMAGE_REC")
+            tokens.append("IMAGE")
 
     path_coords = [[c, r] for (r, c, theta) in full_path]
 
