@@ -594,7 +594,7 @@ def movements_from_path(full_path, breaks, scans_rc, time_limit=TIME_LIMIT_S):
             dist = int(round(s['cells'] * CELL_CM))
             new_s['move_code'] = f"SB{dist:03d}"
         elif s['type'] == 'ARC':
-            new_s['move_code'] = "LF090" if s['direction'] == 'LEFT' else "RF090"
+            new_s['move_code'] = "LF081" if s['direction'] == 'LEFT' else "RF081"
         steps_out.append(new_s)
 
         if abs(t - time_limit) <= 1e-9:
@@ -609,9 +609,9 @@ def movements_from_path(full_path, breaks, scans_rc, time_limit=TIME_LIMIT_S):
             dist = int(round(s['cells'] * CELL_CM))
             tokens.append(f"SB{dist:03d}")
         elif s['type'] == 'ARC':
-            tokens.append("LF090" if s['direction'] == 'LEFT' else "RF090")
+            tokens.append("LF081" if s['direction'] == 'LEFT' else "RF081")
         elif s['type'] == 'RECOGNIZE':
-            tokens.append("IMAGE_REC")
+            tokens.append("IMAGE")
 
     path_coords = [[c, r] for (r, c, theta) in full_path]
 
