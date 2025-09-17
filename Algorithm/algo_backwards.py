@@ -650,9 +650,9 @@ def movements_from_path(full_path, breaks, scans_rc, time_limit=TIME_LIMIT_S):
             dist = int(round(s['cells'] * CELL_CM))
             new_s['move_code'] = f"SB{dist:03d}"
         elif s['type'] == 'ARC_FWD':
-            new_s['move_code'] = "LF090" if s['direction'] == 'LEFT' else "RF090"
+            new_s['move_code'] = "LF081" if s['direction'] == 'LEFT' else "RF081"
         elif s['type'] == 'ARC_BWD':
-            new_s['move_code'] = "LB090" if s['direction'] == 'LEFT' else "RB090"
+            new_s['move_code'] = "LB081" if s['direction'] == 'LEFT' else "RB081"
         steps_out.append(new_s)
 
         if abs(t - time_limit) <= 1e-9:
@@ -667,11 +667,11 @@ def movements_from_path(full_path, breaks, scans_rc, time_limit=TIME_LIMIT_S):
             dist = int(round(s['cells'] * CELL_CM))
             tokens.append(f"SB{dist:03d}")
         elif s['type'] == 'ARC_FWD':
-            tokens.append("LF090" if s['direction'] == 'LEFT' else "RF090")
+            tokens.append("LF081" if s['direction'] == 'LEFT' else "RF081")
         elif s['type'] == 'ARC_BWD':
-            tokens.append("LB090" if s['direction'] == 'LEFT' else "RB090")
+            tokens.append("LB081" if s['direction'] == 'LEFT' else "RB081")
         elif s['type'] == 'RECOGNIZE':
-            tokens.append("IMAGE_REC")
+            tokens.append("IMAGE")
 
     path_coords = [[c, r] for (r, c, theta) in full_path]
 
@@ -1160,7 +1160,7 @@ def _items_from_payload(payload_dict):
     for o in obstacles:
         r = int(o.get("y"))  # y = row
         c = int(o.get("x"))  # x = col
-        side = str(o.get("side", "N")).upper()
+        side = str(o.get("dir", "N")).upper()
         items.append({"rc": (r, c), "side": side})
     return items
 
@@ -1236,7 +1236,7 @@ def task1(json_payload=None):
     print(f"\nSaved JSON trace to: {outfile}")
 
     # 5) Animate if you want a UI (commented for headless use)
-    animate_path(blocked, obstacles_rc, scans, order, full_path, breaks)
+    # animate_path(blocked, obstacles_rc, scans, order, full_path, breaks)
 
 if __name__ == "__main__":
     # For manual testing you can still pass a JSON file path and we’ll load & run it.

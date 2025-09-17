@@ -1100,7 +1100,7 @@ def _items_from_payload(payload_dict):
     for o in obstacles:
         r = int(o.get("y"))  # y = row
         c = int(o.get("x"))  # x = col
-        side = str(o.get("side", "N")).upper()
+        side = str(o.get("dir", "N")).upper()
         items.append({"rc": (r, c), "side": side})
     return items
 
@@ -1176,7 +1176,7 @@ def task1(json_payload=None):
     print(f"\nSaved JSON trace to: {outfile}")
 
     # 5) Animate if you want a UI (commented for headless use)
-   # animate_path(blocked, obstacles_rc, scans, order, full_path, breaks)
+    # animate_path(blocked, obstacles_rc, scans, order, full_path, breaks)
 
 if __name__ == "__main__":
     # For manual testing you can still pass a JSON file path and we’ll load & run it.
