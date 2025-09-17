@@ -8,7 +8,7 @@ import shutil
 import base64
 
 from image_recognition import model_inference
-from Algorithm import algo  # use algo.py to generate movement_trace.json
+from Algorithm import algo_backwards as algo # use algo.py to generate movement_trace.json
 
 # Configuration
 TASK_2 = False  # TODO: Change to False for task 1, True for task 2
