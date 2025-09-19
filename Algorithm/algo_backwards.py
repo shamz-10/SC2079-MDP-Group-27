@@ -650,9 +650,9 @@ def movements_from_path(full_path, breaks, scans_rc, time_limit=TIME_LIMIT_S):
             dist = int(round(s['cells'] * CELL_CM))
             new_s['move_code'] = f"SB{dist:03d}"
         elif s['type'] == 'ARC_FWD':
-            new_s['move_code'] = "LF081" if s['direction'] == 'LEFT' else "RF081"
+            new_s['move_code'] = "LF080" if s['direction'] == 'LEFT' else "RF080"
         elif s['type'] == 'ARC_BWD':
-            new_s['move_code'] = "LB081" if s['direction'] == 'LEFT' else "RB081"
+            new_s['move_code'] = "RB080" if s['direction'] == 'LEFT' else "LB080"
         steps_out.append(new_s)
 
         if abs(t - time_limit) <= 1e-9:
@@ -667,9 +667,9 @@ def movements_from_path(full_path, breaks, scans_rc, time_limit=TIME_LIMIT_S):
             dist = int(round(s['cells'] * CELL_CM))
             tokens.append(f"SB{dist:03d}")
         elif s['type'] == 'ARC_FWD':
-            tokens.append("LF081" if s['direction'] == 'LEFT' else "RF081")
+            tokens.append("LF080" if s['direction'] == 'LEFT' else "RF080")
         elif s['type'] == 'ARC_BWD':
-            tokens.append("LB081" if s['direction'] == 'LEFT' else "RB081")
+            tokens.append("RB080" if s['direction'] == 'LEFT' else "LB080")
         elif s['type'] == 'RECOGNIZE':
             tokens.append("IMAGE")
 
