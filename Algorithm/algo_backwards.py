@@ -174,6 +174,9 @@ DIR_FOR_SIDE = {
     'W': ( 0, +1),  # face East
 }
 
+OFFSET_STRAIGHT = 1
+OFFSET_ARC = 3
+
 # =========================
 # Grid helpers
 # =========================
@@ -331,12 +334,12 @@ def motion_primitives(state):
     dr_r, dc_r = DIRS[theta_r]
 
     # Forward arc endpoints: one forward + one lateral cell
-    fwd_left_end  = (r + dr + dr_l, c + dc + dc_l, theta_l)
-    fwd_right_end = (r + dr + dr_r, c + dc + dc_r, theta_r)
+    fwd_left_end  = (r + OFFSET_STRAIGHT*dr + OFFSET_ARC*dr_l, c + OFFSET_STRAIGHT*dc + OFFSET_ARC*dc_l, theta_l)
+    fwd_right_end = (r + OFFSET_STRAIGHT*dr + OFFSET_ARC*dr_r, c + OFFSET_STRAIGHT*dc + OFFSET_ARC*dc_r, theta_r)
 
     # BACKWARD ARCS: left/right 90° arc (reverse 1 cell and yaw ±90°)
-    bwd_left_end  = (r - dr - dr_l, c - dc - dc_l, theta_l)
-    bwd_right_end = (r - dr - dr_r, c - dc - dc_r, theta_r)
+    bwd_left_end  = (r - OFFSET_STRAIGHT*dr - OFFSET_ARC*dr_l, c - OFFSET_STRAIGHT*dc - OFFSET_ARC*dc_l, theta_l)
+    bwd_right_end = (r - OFFSET_STRAIGHT*dr - OFFSET_ARC*dr_r, c - OFFSET_STRAIGHT*dc - OFFSET_ARC*dc_r, theta_r)
 
     # Calculate Dubins costs for all arcs
     start_x = c * CELL_CM
@@ -344,8 +347,8 @@ def motion_primitives(state):
     start_theta_rad = math.radians(theta)
     
     # Forward left arc
-    fwd_left_x = (c + dc + dc_l) * CELL_CM
-    fwd_left_y = (r + dr + dr_l) * CELL_CM
+    fwd_left_x = (c + OFFSET_STRAIGHT*dc + OFFSET_ARC*dc_l) * CELL_CM
+    fwd_left_y = (r + OFFSET_STRAIGHT*dr + OFFSET_ARC*dr_l) * CELL_CM
     fwd_left_theta_rad = math.radians(theta_l)
     fwd_left_cost = dubins_path_cost(
         (start_x, start_y, start_theta_rad),
@@ -355,8 +358,8 @@ def motion_primitives(state):
     )
     
     # Forward right arc
-    fwd_right_x = (c + dc + dc_r) * CELL_CM
-    fwd_right_y = (r + dr + dr_r) * CELL_CM
+    fwd_right_x = (c + OFFSET_STRAIGHT*dc + OFFSET_ARC*dc_r) * CELL_CM
+    fwd_right_y = (r + OFFSET_STRAIGHT*dr + OFFSET_ARC*dr_r) * CELL_CM
     fwd_right_theta_rad = math.radians(theta_r)
     fwd_right_cost = dubins_path_cost(
         (start_x, start_y, start_theta_rad),
@@ -366,8 +369,8 @@ def motion_primitives(state):
     )
     
     # Backward left arc
-    bwd_left_x = (c - dc - dc_l) * CELL_CM
-    bwd_left_y = (r - dr - dr_l) * CELL_CM
+    bwd_left_x = (c - OFFSET_STRAIGHT*dc - OFFSET_ARC*dc_l) * CELL_CM
+    bwd_left_y = (r - OFFSET_STRAIGHT*dr - OFFSET_ARC*dr_l) * CELL_CM
     bwd_left_theta_rad = math.radians(theta_l)
     bwd_left_cost = dubins_path_cost(
         (start_x, start_y, start_theta_rad),
@@ -377,8 +380,8 @@ def motion_primitives(state):
     )
     
     # Backward right arc
-    bwd_right_x = (c - dc - dc_r) * CELL_CM
-    bwd_right_y = (r - dr - dr_r) * CELL_CM
+    bwd_right_x = (c - OFFSET_STRAIGHT*dc - OFFSET_ARC*dc_r) * CELL_CM
+    bwd_right_y = (r - OFFSET_STRAIGHT*dr - OFFSET_ARC*dr_r) * CELL_CM
     bwd_right_theta_rad = math.radians(theta_r)
     bwd_right_cost = dubins_path_cost(
         (start_x, start_y, start_theta_rad),
@@ -493,11 +496,11 @@ def _step_cost(a, b):
         fdr_b, fdc_b = DIRS[tb]
         
         # Forward arc: advance in original direction + lateral in new direction
-        if (rb - ra, cb - ca) == (fdr_a + fdr_b, fdc_a + fdc_b):
+        if (rb - ra, cb - ca) == (OFFSET_STRAIGHT*fdr_a + OFFSET_ARC*fdr_b, OFFSET_STRAIGHT*fdc_a + OFFSET_ARC*fdc_b):
             return ARC_COST
         
         # Backward arc: reverse in original direction + lateral in new direction  
-        if (rb - ra, cb - ca) == (-fdr_a - fdr_b, -fdc_a - fdc_b):
+        if (rb - ra, cb - ca) == (-OFFSET_STRAIGHT*fdr_a - OFFSET_ARC*fdr_b, -OFFSET_STRAIGHT*fdc_a - OFFSET_ARC*fdc_b):
             return ARC_COST
     
     # Fallback to forward cost
@@ -555,14 +558,14 @@ def _primitive_from_edge(a, b):
         fdr_b, fdc_b = DIRS[tb]
         
         # Forward arc
-        if (rb - ra, cb - ca) == (fdr_a + fdr_b, fdc_a + fdc_b):
+        if (rb - ra, cb - ca) == (OFFSET_STRAIGHT*fdr_a + OFFSET_ARC*fdr_b, OFFSET_STRAIGHT*fdc_a + OFFSET_ARC*fdc_b):
             return {'type':'ARC_FWD', 'direction': tdir,
                     'advance_cells': 1, 'delta_heading_deg': 90,
                     'dt': ARC_COST,
                     'from': (ra, ca, ta), 'to': (rb, cb, tb)}
         
         # Backward arc
-        if (rb - ra, cb - ca) == (-fdr_a - fdr_b, -fdc_a - fdc_b):
+        if (rb - ra, cb - ca) == (-OFFSET_STRAIGHT*fdr_a - OFFSET_ARC*fdr_b, -OFFSET_STRAIGHT*fdc_a - OFFSET_ARC*fdc_b):
             return {'type':'ARC_BWD', 'direction': tdir,
                     'advance_cells': -1, 'delta_heading_deg': 90,
                     'dt': ARC_COST,
@@ -1236,7 +1239,7 @@ def task1(json_payload=None):
     print(f"\nSaved JSON trace to: {outfile}")
 
     # 5) Animate if you want a UI (commented for headless use)
-    # animate_path(blocked, obstacles_rc, scans, order, full_path, breaks)
+    animate_path(blocked, obstacles_rc, scans, order, full_path, breaks)
 
 if __name__ == "__main__":
     # For manual testing you can still pass a JSON file path and we’ll load & run it.
