@@ -19,6 +19,58 @@ PC_PORT = 8888            # Replace with the port used by the PC server
 PC_BUFFER_SIZE = 1024
 NUM_OF_RETRIES = 2
 
+# NAV_COMMANDS = [
+#     {
+#     "type": "NAVIGATION",
+#     "data": {
+#         "commands": ['SF060', 
+#                      'RF079', 
+#                      'IMAGE'
+#                      ],
+#         "path": []  # Optionally fill this with the corresponding path if needed
+#         }
+#     },
+#     {
+#         "type": "NAVIGATION",
+#         "data": {
+#             "commands": [
+#                 'LF079', 
+#                 'RF079', 
+#                 'SF030', 
+#                 'LB079', 
+#                 'IMAGE'
+#             ],
+#             "path": []
+#         }
+#     },
+#     {
+#         "type": "NAVIGATION",
+#         "data": {
+#             "commands": [
+#                 'LF079', 
+#                 'RF079', 
+#                 'SF040', 
+#                 'LB079', 
+#                 'IMAGE'
+#             ],
+#             "path": []
+#         }
+#     },
+#     {
+#         "type": "NAVIGATION",
+#         "data": {
+#             "commands": [
+#                 'LF079', 
+#                 'RF079', 
+#                 'SF040', 
+#                 'LB079', 
+#                 'IMAGE'
+#             ],
+#             "path": []
+#         }
+#     }
+# ]
+
 
 class MovementTraceNavigator:
     """
@@ -89,12 +141,16 @@ class MovementTraceNavigator:
             if seg_cmds or seg_path:
                 segments.append({"commands": seg_cmds, "path": seg_path})
 
+
             # consume IMAGE_REC boundary (don’t move along path)
             # if i_cmd < len(cmds) and cmds[i_cmd] == "IMAGE":
             #     i_cmd += 1
+        print("Segments:", segments)
+
 
 
         self.segments = segments
+        print(self.segments)
         self.segment_idx = 0
         self.obs_id = 0
 
@@ -159,6 +215,8 @@ class PCClient:
 
         # NEW: provide a t1 object compatible with your old calls
         self.t1 = MovementTraceNavigator()
+        self.nav_command_idx = 0
+
 
     def connect(self):
         # Establish a connection with the PC
@@ -232,7 +290,7 @@ class PCClient:
                     print("[PC Client] PC Server disconnected remotely.")
                     self.reconnect()
 
-                print("[PC Client] Received message: first 100:", message)
+                print("[PC Client] Received message: first 100:", message[:100])
 
                 message = json.loads(message)
 
@@ -302,25 +360,30 @@ class PCClient:
                                 break
                         
                         # If still can't find a prediction, repeat the last command
-                        if image_prediction['data']['img_id'] == None and NUM_OF_RETRIES > retries:
+                        if image_prediction['data']['img_id'] == None:# and NUM_OF_RETRIES > retries:
                             
-                            if command['type'] == 'FASTEST_PATH':
-                                image_prediction['data']['img_id'] = "38" # 38 is right, 39 is left
-                            else:
-                                last_path = command['data']['path'][-1]
-                                if (retries+1)%2==0:
-                                    command = {"type": "NAVIGATION", "data": {"commands": ['RF010','RB010'], "path": [last_path, last_path]}}
-                                else:
-                                    command = {"type": "NAVIGATION", "data": {"commands": ['RB010','RF010'], "path": [last_path, last_path]}}
+                            # if command['type'] == 'FASTEST_PATH':
+                            #     image_prediction['data']['img_id'] = "38" # 38 is right, 39 is left
+                            # else:
+                            #     last_path = command['data']['path'][-1]
+                            #     if (retries+1)%2==0:
+                            #         command = {"type": "NAVIGATION", "data": {"commands": ['RF010','RB010'], "path": [last_path, last_path]}}
+                            #     else:
+                            #         command = {"type": "NAVIGATION", "data": {"commands": ['RB010','RF010'], "path": [last_path, last_path]}}
 
-                            self.msg_queue.put(json.dumps(command))
-                            retries += 1
-                            continue
+                            # self.msg_queue.put(json.dumps(command))
+                            # retries += 1
+                            self.nav_command_idx += 1
+                            # if self.nav_command_idx < len(NAV_COMMANDS):
+                            #     print("sending one more command")
+                            #     self.msg_queue.put(json.dumps(NAV_COMMANDS[self.nav_command_idx]))
+                            # continue
                             
-                        # # For checklist A.5
+                        # For checklist A.5
                         # else:
-                        #     print("[Algo] Find the non-bulleye ended")
-                        #     return
+                            # image_found=True
+                            # print("[Algo] Find the non-bulleye ended")
+                            # return
 
                         # copy image to images_result folder and rename them according to obs_id
                         destination_folder = "images_result"
@@ -389,21 +452,64 @@ if __name__ == "__main__":
     PC_client_receive.start()
     print("[PC Client] Listening thread started successfully")
 
+    # client.msg_queue.put(json.dumps(NAV_COMMANDS[client.nav_command_idx]))
+
+
+    # command = {
+    # "type": "NAVIGATION",
+    # "data": {
+    #     "commands": ['SF060', 
+    #                  'RF079', 
+    #                  'IMAGE'
+    #                  ],
+    #     "path": []  # Optionally fill this with the corresponding path if needed
+    #     }
+    # }
+    # client.msg_queue.put(json.dumps(command))
 
     # command = {
     # "type": "NAVIGATION",
     # "data": {
     #     "commands": [
-    #         "SF010",
-            
-            
-        
-    #         "IMAGE"
-    #     ],
+    #                  'LF079', 
+    #                  'RF079', 
+    #                  'SF030', 
+    #                  'LB079', 
+    #                  'IMAGE'
+    #                  ],
     #     "path": []  # Optionally fill this with the corresponding path if needed
     #     }
     # }
     # client.msg_queue.put(json.dumps(command))
+
+    # command = {
+    # "type": "NAVIGATION",
+    # "data": {
+    #     "commands": [
+    #                  'LF079', 
+    #                  'RF079', 
+    #                  'SF040', 
+    #                  'LB079', 
+    #                  'IMAGE'],
+    #     "path": []  # Optionally fill this with the corresponding path if needed
+    #     }
+    # }
+    # client.msg_queue.put(json.dumps(command))
+
+    # command = {
+    # "type": "NAVIGATION",
+    # "data": {
+    #     "commands": [
+    #                  'LF079', 
+    #                  'RF079', 
+    #                  'SF040', 
+    #                  'LB079', 
+    #                  'IMAGE'],
+    #     "path": []  # Optionally fill this with the corresponding path if needed
+    #     }
+    # }
+    # client.msg_queue.put(json.dumps(command))
+
 
     # Optionally join:
     PC_client_receive.join()
