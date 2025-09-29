@@ -2,3 +2,4 @@
 /captured_images/
 *.pyc
 *.jpg
+/venv
