@@ -8,6 +8,7 @@ import shutil
 import base64
 
 from image_recognition import model_inference
+from image_recognition.stitch_images import stitching_images
 from Algorithm import algo_backwards as algo # Using updated algo_backwards
 
 # Configuration
@@ -345,15 +346,15 @@ class PCClient:
                         # end of temp test code
 
                         # Update self.t1 to input new path, may put this above the image inference if we don't want to wait and stop
-                        # if not self.t1.has_task_ended():
-                        #     command = self.t1.get_command_to_next_obstacle()
-                        #     self.msg_queue.put(json.dumps(command))
-                        #     obs_id = str(self.t1.get_obstacle_id())
-                        # else:
-                        #     if not self.task_2:
-                        #         print("[Algo] Task 1 ended")
-                        #         stitching_images(r'images_result', r'image_recognition\stitched_image.jpg')
-                        #         break # exit thread
+                        if not self.t1.has_task_ended():
+                            command = self.t1.get_command_to_next_obstacle()
+                            self.msg_queue.put(json.dumps(command))
+                            obs_id = str(self.t1.get_obstacle_id())
+                        else:
+                            if not self.task_2:
+                                print("[Algo] Task 1 ended")
+                                stitching_images(r'images_result', r'image_recognition\stitched_image.jpg')
+                                break # exit thread
 
                         self.image_record = [] # reset the image record
 
@@ -391,4 +392,5 @@ if __name__ == "__main__":
     client.disconnect()
 
 
-    client.t1.generate_path({"type":"START_TASK","data":{"obstacles_file":"obstacles.json"}})
+    # For testing task 1 path generation
+    # client.t1.generate_path({"type":"START_TASK","data":{"obstacles_file":"obstacles.json"}})
