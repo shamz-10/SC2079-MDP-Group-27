@@ -8,68 +8,16 @@ import shutil
 import base64
 
 from image_recognition import model_inference
-from Algorithm import algo_backwards as algo # use algo.py to generate movement_trace.json
+from Algorithm import algo_backwards as algo # Using updated algo_backwards
 
 # Configuration
-TASK_2 = False  # TODO: Change to False for task 1, True for task 2
+TASK_2 = False  #TODO: Change to False for task 1, True for task 2
 
 # Constants
 RPI_IP = "192.168.27.27"  # Replace with the Raspberry Pi's IP address
 PC_PORT = 8888            # Replace with the port used by the PC server
 PC_BUFFER_SIZE = 1024
-NUM_OF_RETRIES = 2
-
-# NAV_COMMANDS = [
-#     {
-#     "type": "NAVIGATION",
-#     "data": {
-#         "commands": ['SF060', 
-#                      'RF079', 
-#                      'IMAGE'
-#                      ],
-#         "path": []  # Optionally fill this with the corresponding path if needed
-#         }
-#     },
-#     {
-#         "type": "NAVIGATION",
-#         "data": {
-#             "commands": [
-#                 'LF079', 
-#                 'RF079', 
-#                 'SF030', 
-#                 'LB079', 
-#                 'IMAGE'
-#             ],
-#             "path": []
-#         }
-#     },
-#     {
-#         "type": "NAVIGATION",
-#         "data": {
-#             "commands": [
-#                 'LF079', 
-#                 'RF079', 
-#                 'SF040', 
-#                 'LB079', 
-#                 'IMAGE'
-#             ],
-#             "path": []
-#         }
-#     },
-#     {
-#         "type": "NAVIGATION",
-#         "data": {
-#             "commands": [
-#                 'LF079', 
-#                 'RF079', 
-#                 'SF040', 
-#                 'LB079', 
-#                 'IMAGE'
-#             ],
-#             "path": []
-#         }
-#     }
-# ]
+# NUM_OF_RETRIES = 2
 
 
 class MovementTraceNavigator:
@@ -109,11 +57,11 @@ class MovementTraceNavigator:
             while i_cmd < len(cmds):
                 cmd = cmds[i_cmd]
                 seg_cmds.append(cmd)
-                print("cmd appended", cmd)
+                # print("cmd appended", cmd)
                 i_cmd += 1
 
                 if i_cmd < len(cmds) and cmd == "IMAGE":
-                    continue
+                    break
 
                 # Advance along path according to command semantics
                 # Straight moves are encoded like SB050, SF140 (distance in mm/10)
@@ -125,11 +73,11 @@ class MovementTraceNavigator:
                     except Exception:
                         steps = 1
                 elif (cmd[0] == 'L' or cmd[0]== 'R'):
-                    steps=1
+                    steps=1 #TODO: Change according to 1x3 turn
                 else:
                     steps = 0
                 
-                print("print cmd, steps:",cmd, steps)
+                # print("print cmd, steps:",cmd, steps)
 
                 # Move i_path forward but never past the final state
                 if steps > 0:
@@ -141,16 +89,12 @@ class MovementTraceNavigator:
             if seg_cmds or seg_path:
                 segments.append({"commands": seg_cmds, "path": seg_path})
 
-
             # consume IMAGE_REC boundary (don’t move along path)
             # if i_cmd < len(cmds) and cmds[i_cmd] == "IMAGE":
             #     i_cmd += 1
         print("Segments:", segments)
 
-
-
         self.segments = segments
-        print(self.segments)
         self.segment_idx = 0
         self.obs_id = 0
 
@@ -215,8 +159,6 @@ class PCClient:
 
         # NEW: provide a t1 object compatible with your old calls
         self.t1 = MovementTraceNavigator()
-        self.nav_command_idx = 0
-
 
     def connect(self):
         # Establish a connection with the PC
@@ -348,8 +290,6 @@ class PCClient:
                     image_counter += 1
                     print(image_prediction)
 
-                    print("image prediction")
-
                     if message["final_image"] == True:
                         
                         # Get last prediction and move forward
@@ -373,17 +313,8 @@ class PCClient:
 
                             # self.msg_queue.put(json.dumps(command))
                             # retries += 1
-                            self.nav_command_idx += 1
-                            # if self.nav_command_idx < len(NAV_COMMANDS):
-                            #     print("sending one more command")
-                            #     self.msg_queue.put(json.dumps(NAV_COMMANDS[self.nav_command_idx]))
-                            # continue
-                            
-                        # For checklist A.5
-                        # else:
-                            # image_found=True
-                            # print("[Algo] Find the non-bulleye ended")
-                            # return
+                            continue
+                        
 
                         # copy image to images_result folder and rename them according to obs_id
                         destination_folder = "images_result"
@@ -452,66 +383,12 @@ if __name__ == "__main__":
     PC_client_receive.start()
     print("[PC Client] Listening thread started successfully")
 
-    # client.msg_queue.put(json.dumps(NAV_COMMANDS[client.nav_command_idx]))
-
-
-    # command = {
-    # "type": "NAVIGATION",
-    # "data": {
-    #     "commands": ['SF060', 
-    #                  'RF079', 
-    #                  'IMAGE'
-    #                  ],
-    #     "path": []  # Optionally fill this with the corresponding path if needed
-    #     }
-    # }
-    # client.msg_queue.put(json.dumps(command))
-
-    # command = {
-    # "type": "NAVIGATION",
-    # "data": {
-    #     "commands": [
-    #                  'LF079', 
-    #                  'RF079', 
-    #                  'SF030', 
-    #                  'LB079', 
-    #                  'IMAGE'
-    #                  ],
-    #     "path": []  # Optionally fill this with the corresponding path if needed
-    #     }
-    # }
-    # client.msg_queue.put(json.dumps(command))
-
-    # command = {
-    # "type": "NAVIGATION",
-    # "data": {
-    #     "commands": [
-    #                  'LF079', 
-    #                  'RF079', 
-    #                  'SF040', 
-    #                  'LB079', 
-    #                  'IMAGE'],
-    #     "path": []  # Optionally fill this with the corresponding path if needed
-    #     }
-    # }
-    # client.msg_queue.put(json.dumps(command))
-
-    # command = {
-    # "type": "NAVIGATION",
-    # "data": {
-    #     "commands": [
-    #                  'LF079', 
-    #                  'RF079', 
-    #                  'SF040', 
-    #                  'LB079', 
-    #                  'IMAGE'],
-    #     "path": []  # Optionally fill this with the corresponding path if needed
-    #     }
-    # }
-    # client.msg_queue.put(json.dumps(command))
-
-
     # Optionally join:
     PC_client_receive.join()
     PC_client_send.join()
+    # print("[PC Client] All threads concluded, cleaning up...")
+
     client.disconnect()
+
+
+    client.t1.generate_path({"type":"START_TASK","data":{"obstacles_file":"obstacles.json"}})
