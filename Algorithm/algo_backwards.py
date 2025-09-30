@@ -1238,12 +1238,13 @@ def nearest_free_center(blocked, start_rc):
 def _items_from_payload(payload_dict):
     """
     Extract obstacles [{"rc":(r,c), "side":...}, ...] from a START_TASK-like dict.
+    Convert from 10cm grid to 5cm grid
     """
     items = []
     obstacles = payload_dict.get("data", {}).get("obstacles", [])
     for o in obstacles:
-        r = int(o.get("y"))  # y = row
-        c = int(o.get("x"))  # x = col
+        r = int(o.get("y")) * 2  # 10cm -> 5cm
+        c = int(o.get("x")) * 2
         side = str(o.get("dir", "N")).upper()
         items.append({"rc": (r, c), "side": side})
     return items
@@ -1258,8 +1259,9 @@ def _start_override_from_payload(payload_dict):
         return None
     dir_map = {"N": 0, "E": 90, "S": 180, "W": 270}
     try:
-        rx = int(robot.get("x"))
-        ry = int(robot.get("y"))
+        # rx = int(robot.get("x")) * 2
+        # ry = int(robot.get("y")) * 2
+        rx, ry = 0, 0
         rdir = str(robot.get("dir", "N")).upper()
         return (ry, rx, dir_map.get(rdir, START_RC[2]))
     except Exception:
