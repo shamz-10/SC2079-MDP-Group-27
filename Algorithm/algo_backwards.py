@@ -265,7 +265,7 @@ SPEED_CM_S = 20.0      # robot linear speed in cm/s
 # Primitive **times** (seconds)
 FORWARD_COST = CELL_CM / SPEED_CM_S
 BACKWARD_COST = FORWARD_COST * 1.10
-ARC_COST = (math.pi * TURNING_RADIUS * CELL_CM / 2.0) / SPEED_CM_S
+ARC_COST = (math.pi * TURNING_RADIUS * CELL_CM / 2.0) / 50.0
 
 RECOGNITION_TIME_S = 2.0
 TIME_LIMIT_S = 120.0
@@ -336,15 +336,36 @@ def cells_between(a, b):
     return cells
 
 def transition_collision_free(a, b, grid_blocked):
-    """Conservative collision check along the a->b transition."""
+    """Swept collision check along a->b with balanced heading checks."""
+    # End pose must be valid (full footprint at the end heading)
     if not collision_free_cell(b[0], b[1], grid_blocked, b[2]):
         return False
-    if not SAMPLE_TRANSITIONS:
-        return True
-    for (r, c) in cells_between(a, b):
-        if not collision_free_cell(r, c, grid_blocked, a[2]):
-            return False
+
+    # If you want to quickly test that planning still works, you can
+    # temporarily bypass the sweep by returning True here.
+    # return True
+
+    # Dense sample of cells between a and b
+    (ra, ca, _), (rb, cb, _) = a, b
+    dr = rb - ra
+    dc = cb - ca
+    steps = max(abs(dr), abs(dc), 1)
+    for k in range(1, steps + 1):
+        r = ra + int(round(k * dr / steps))
+        c = ca + int(round(k * dc / steps))
+
+        # Check with start heading for first half of the sweep
+        # and end heading for the second half. This approximates
+        # the yaw change across an arc without over-rejecting.
+        if k <= steps // 2:
+            if not collision_free_cell(r, c, grid_blocked, a[2]):
+                return False
+        else:
+            if not collision_free_cell(r, c, grid_blocked, b[2]):
+                return False
+
     return True
+
 
 def motion_primitives(state):
     """
@@ -699,10 +720,22 @@ def movements_from_path(full_path, breaks, scans_rc, time_limit=TIME_LIMIT_S):
     for s in steps_out:
         if s['type'] == 'FWD':
             dist = int(round(s['cells'] * CELL_CM))
-            tokens.append(f"SF{dist:03d}")
+            if(dist > 100):
+                dist1 = 100
+                dist2 = dist - 100
+                tokens.append(f"SF{dist1:03d}")
+                tokens.append(f"SF{dist2:03d}")
+            else:
+                tokens.append(f"SF{dist:03d}")
         elif s['type'] == 'BWD':
             dist = int(round(s['cells'] * CELL_CM))
-            tokens.append(f"SB{dist:03d}")
+            if(dist > 100):
+                dist1 = 100
+                dist2 = dist - 100
+                tokens.append(f"SB{dist1:03d}")
+                tokens.append(f"SB{dist2:03d}")
+            else:
+                tokens.append(f"SB{dist:03d}")
         elif s['type'] == 'ARC_FWD':
             tokens.append("LF087" if s['direction'] == 'LEFT' else "RF087")
         elif s['type'] == 'ARC_BWD':
