@@ -203,7 +203,7 @@ class PCClient:
                 while exception:
                     try:
                         self.client_socket.sendall(self.prepend_msg_size(message))
-                        print("[PC Client] Write to RPI: first 100=", message[:100])
+                        print("[PC Client] Write to RPI: first 100=", message[:200])
                     except Exception as e:
                         print("[PC Client] ERROR: Failed to write to RPI -", str(e))
                         self.reconnect()
@@ -236,7 +236,7 @@ class PCClient:
                     print("[PC Client] PC Server disconnected remotely.")
                     self.reconnect()
 
-                print("[PC Client] Received message: first 100:", message)
+                print("[PC Client] Received message: first 100:", message[:200])
 
                 message = json.loads(message)
 
