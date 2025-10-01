@@ -1,1 +1,1 @@
-{"type":"START_TASK","data":{"task":"EXPLORATION","robot":{"id":"R","x":1,"y":1,"dir":"N"},"obstacles":[{"id":"1","x":3,"y":11,"dir":"E"},{"id":"2","x":13,"y":11,"dir":"E"}]}}
+{"type":"START_TASK","data":{"task":"EXPLORATION","robot":{"id":"R","x":10,"y":10,"dir":"N"},"obstacles":[{"id":"1","x":9,"y":19,"dir":"S"}]}}

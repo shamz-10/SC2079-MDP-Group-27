@@ -156,8 +156,8 @@ CELL_CM = 5.0              # each cell = 10cm
 WORLD_CM = NCELLS * CELL_CM
 
 ROBOT_FOOTPRINT = 6         # robot is 3x3 cells
-# INFLATE_RADIUS = (ROBOT_FOOTPRINT - 1)//2  # = 1
-INFLATE_RADIUS = 0
+INFLATE_RADIUS = (ROBOT_FOOTPRINT - 1)//2  # = 1
+#INFLATE_RADIUS = 0
 
 OB_SIZE_CELLS = 2           # obstacle occupies 1x1 cell
 SCAN_OFFSET_CELLS = 6       # 2 cells = 20cm away from obstacle side
@@ -272,8 +272,19 @@ TIME_LIMIT_S = 120.0
 
 SAMPLE_TRANSITIONS = True
 
-OFFSET_STRAIGHT = 6
-OFFSET_ARC = 6
+RF_OFFSET_STRAIGHT = 6
+RF_OFFSET_ARC = 6
+
+LF_OFFSET_STRAIGHT = 4
+LF_OFFSET_ARC = 3
+
+#Logic is swap, this is for LEFT BACK TURNS
+RB_OFFSET_STRAIGHT = 2
+RB_OFFSET_ARC = 4
+
+#Logic is swap, this is for RIGHT BACK TURNS
+LB_OFFSET_STRAIGHT = 5
+LB_OFFSET_ARC = 7
 
 def dir_to_theta(dr, dc):
     for theta, (rr, cc) in DIRS.items():
@@ -336,34 +347,14 @@ def cells_between(a, b):
     return cells
 
 def transition_collision_free(a, b, grid_blocked):
-    """Swept collision check along a->b with balanced heading checks."""
-    # End pose must be valid (full footprint at the end heading)
+    """Conservative collision check along the a->b transition."""
     if not collision_free_cell(b[0], b[1], grid_blocked, b[2]):
         return False
-
-    # If you want to quickly test that planning still works, you can
-    # temporarily bypass the sweep by returning True here.
-    # return True
-
-    # Dense sample of cells between a and b
-    (ra, ca, _), (rb, cb, _) = a, b
-    dr = rb - ra
-    dc = cb - ca
-    steps = max(abs(dr), abs(dc), 1)
-    for k in range(1, steps + 1):
-        r = ra + int(round(k * dr / steps))
-        c = ca + int(round(k * dc / steps))
-
-        # Check with start heading for first half of the sweep
-        # and end heading for the second half. This approximates
-        # the yaw change across an arc without over-rejecting.
-        if k <= steps // 2:
-            if not collision_free_cell(r, c, grid_blocked, a[2]):
-                return False
-        else:
-            if not collision_free_cell(r, c, grid_blocked, b[2]):
-                return False
-
+    if not SAMPLE_TRANSITIONS:
+        return True
+    for (r, c) in cells_between(a, b):
+        if not collision_free_cell(r, c, grid_blocked, a[2]):
+            return False
     return True
 
 
@@ -389,12 +380,12 @@ def motion_primitives(state):
     dr_r, dc_r = DIRS[theta_r]
 
     # Forward arc endpoints: one forward + one lateral cell
-    fwd_left_end  = (r + OFFSET_STRAIGHT*dr + OFFSET_ARC*dr_l, c + OFFSET_STRAIGHT*dc + OFFSET_ARC*dc_l, theta_l)
-    fwd_right_end = (r + OFFSET_STRAIGHT*dr + OFFSET_ARC*dr_r, c + OFFSET_STRAIGHT*dc + OFFSET_ARC*dc_r, theta_r)
+    fwd_left_end  = (r + LF_OFFSET_STRAIGHT*dr + LF_OFFSET_ARC*dr_l, c + LF_OFFSET_STRAIGHT*dc + LF_OFFSET_ARC*dc_l, theta_l)
+    fwd_right_end = (r + RF_OFFSET_STRAIGHT*dr + RF_OFFSET_ARC*dr_r, c + RF_OFFSET_STRAIGHT*dc + RF_OFFSET_ARC*dc_r, theta_r)
 
     # BACKWARD ARCS: left/right 90° arc (reverse 1 cell and yaw ±90°)
-    bwd_left_end  = (r - OFFSET_STRAIGHT*dr - OFFSET_ARC*dr_l, c - OFFSET_STRAIGHT*dc - OFFSET_ARC*dc_l, theta_l)
-    bwd_right_end = (r - OFFSET_STRAIGHT*dr - OFFSET_ARC*dr_r, c - OFFSET_STRAIGHT*dc - OFFSET_ARC*dc_r, theta_r)
+    bwd_left_end  = (r - LB_OFFSET_STRAIGHT*dr - LB_OFFSET_ARC*dr_l, c - LB_OFFSET_STRAIGHT*dc - LB_OFFSET_ARC*dc_l, theta_l)
+    bwd_right_end = (r - RB_OFFSET_STRAIGHT*dr - RB_OFFSET_ARC*dr_r, c - RB_OFFSET_STRAIGHT*dc - RB_OFFSET_ARC*dc_r, theta_r)
 
     # Calculate Dubins costs for all arcs
     start_x = c * CELL_CM
@@ -402,8 +393,8 @@ def motion_primitives(state):
     start_theta_rad = math.radians(theta)
     
     # Forward left arc
-    fwd_left_x = (c + OFFSET_STRAIGHT*dc + OFFSET_ARC*dc_l) * CELL_CM
-    fwd_left_y = (r + OFFSET_STRAIGHT*dr + OFFSET_ARC*dr_l) * CELL_CM
+    fwd_left_x = (c + LF_OFFSET_STRAIGHT*dc + LF_OFFSET_ARC*dc_l) * CELL_CM
+    fwd_left_y = (r + LF_OFFSET_STRAIGHT*dr + LF_OFFSET_ARC*dr_l) * CELL_CM
     fwd_left_theta_rad = math.radians(theta_l)
     fwd_left_cost = dubins_path_cost(
         (start_x, start_y, start_theta_rad),
@@ -413,8 +404,8 @@ def motion_primitives(state):
     )
     
     # Forward right arc
-    fwd_right_x = (c + OFFSET_STRAIGHT*dc + OFFSET_ARC*dc_r) * CELL_CM
-    fwd_right_y = (r + OFFSET_STRAIGHT*dr + OFFSET_ARC*dr_r) * CELL_CM
+    fwd_right_x = (c + RF_OFFSET_STRAIGHT*dc + RF_OFFSET_ARC*dc_r) * CELL_CM
+    fwd_right_y = (r + RF_OFFSET_STRAIGHT*dr + RF_OFFSET_ARC*dr_r) * CELL_CM
     fwd_right_theta_rad = math.radians(theta_r)
     fwd_right_cost = dubins_path_cost(
         (start_x, start_y, start_theta_rad),
@@ -424,8 +415,8 @@ def motion_primitives(state):
     )
     
     # Backward left arc
-    bwd_left_x = (c - OFFSET_STRAIGHT*dc - OFFSET_ARC*dc_l) * CELL_CM
-    bwd_left_y = (r - OFFSET_STRAIGHT*dr - OFFSET_ARC*dr_l) * CELL_CM
+    bwd_left_x = (c - LB_OFFSET_STRAIGHT*dc - LB_OFFSET_ARC*dc_l) * CELL_CM
+    bwd_left_y = (r - LB_OFFSET_STRAIGHT*dr - LB_OFFSET_ARC*dr_l) * CELL_CM
     bwd_left_theta_rad = math.radians(theta_l)
     bwd_left_cost = dubins_path_cost(
         (start_x, start_y, start_theta_rad),
@@ -435,8 +426,8 @@ def motion_primitives(state):
     )
     
     # Backward right arc
-    bwd_right_x = (c - OFFSET_STRAIGHT*dc - OFFSET_ARC*dc_r) * CELL_CM
-    bwd_right_y = (r - OFFSET_STRAIGHT*dr - OFFSET_ARC*dr_r) * CELL_CM
+    bwd_right_x = (c - RB_OFFSET_STRAIGHT*dc - RB_OFFSET_ARC*dc_r) * CELL_CM
+    bwd_right_y = (r - RB_OFFSET_STRAIGHT*dr - RB_OFFSET_ARC*dr_r) * CELL_CM
     bwd_right_theta_rad = math.radians(theta_r)
     bwd_right_cost = dubins_path_cost(
         (start_x, start_y, start_theta_rad),
@@ -551,11 +542,15 @@ def _step_cost(a, b):
         fdr_b, fdc_b = DIRS[tb]
         
         # Forward arc: advance in original direction + lateral in new direction
-        if (rb - ra, cb - ca) == (OFFSET_STRAIGHT*fdr_a + OFFSET_ARC*fdr_b, OFFSET_STRAIGHT*fdc_a + OFFSET_ARC*fdc_b):
+        if (rb - ra, cb - ca) == (LF_OFFSET_STRAIGHT*fdr_a + LF_OFFSET_ARC*fdr_b, LF_OFFSET_STRAIGHT*fdc_a + LF_OFFSET_ARC*fdc_b):
+            return ARC_COST
+        if (rb - ra, cb - ca) == (RF_OFFSET_STRAIGHT*fdr_a + RF_OFFSET_ARC*fdr_b, RF_OFFSET_STRAIGHT*fdc_a + RF_OFFSET_ARC*fdc_b):
             return ARC_COST
         
         # Backward arc: reverse in original direction + lateral in new direction  
-        if (rb - ra, cb - ca) == (-OFFSET_STRAIGHT*fdr_a - OFFSET_ARC*fdr_b, -OFFSET_STRAIGHT*fdc_a - OFFSET_ARC*fdc_b):
+        if (rb - ra, cb - ca) == (-LB_OFFSET_ARC*fdr_a - LB_OFFSET_STRAIGHT*fdr_b, -LB_OFFSET_ARC*fdc_a - LB_OFFSET_STRAIGHT*fdc_b):
+            return ARC_COST
+        if (rb - ra, cb - ca) == (-RB_OFFSET_ARC*fdr_a - RB_OFFSET_STRAIGHT*fdr_b, -RB_OFFSET_ARC*fdc_a - RB_OFFSET_STRAIGHT*fdc_b):
             return ARC_COST
     
     # Fallback to forward cost
@@ -612,19 +607,37 @@ def _primitive_from_edge(a, b):
         fdr_a, fdc_a = DIRS[ta]
         fdr_b, fdc_b = DIRS[tb]
         
-        # Forward arc
-        if (rb - ra, cb - ca) == (OFFSET_STRAIGHT*fdr_a + OFFSET_ARC*fdr_b, OFFSET_STRAIGHT*fdc_a + OFFSET_ARC*fdc_b):
-            return {'type':'ARC_FWD', 'direction': tdir,
+        # Forward left arc
+        if tdir == 'LEFT' and (rb - ra, cb - ca) == (
+            LF_OFFSET_STRAIGHT*fdr_a + LF_OFFSET_ARC*fdr_b,
+            LF_OFFSET_STRAIGHT*fdc_a + LF_OFFSET_ARC*fdc_b):
+            return {'type':'ARC_FWD', 'direction':'LEFT',
                     'advance_cells': 1, 'delta_heading_deg': 90,
-                    'dt': ARC_COST,
-                    'from': (ra, ca, ta), 'to': (rb, cb, tb)}
-        
-        # Backward arc
-        if (rb - ra, cb - ca) == (-OFFSET_STRAIGHT*fdr_a - OFFSET_ARC*fdr_b, -OFFSET_STRAIGHT*fdc_a - OFFSET_ARC*fdc_b):
-            return {'type':'ARC_BWD', 'direction': tdir,
+                    'dt': ARC_COST, 'from': a, 'to': b}
+
+        # Forward right arc
+        if tdir == 'RIGHT' and (rb - ra, cb - ca) == (
+            RF_OFFSET_STRAIGHT*fdr_a + RF_OFFSET_ARC*fdr_b,
+            RF_OFFSET_STRAIGHT*fdc_a + RF_OFFSET_ARC*fdc_b):
+            return {'type':'ARC_FWD', 'direction':'RIGHT',
+                    'advance_cells': 1, 'delta_heading_deg': 90,
+                    'dt': ARC_COST, 'from': a, 'to': b}
+
+        # Backward left arc
+        if tdir == 'LEFT' and (rb - ra, cb - ca) == (
+            -LB_OFFSET_STRAIGHT*fdr_a - LB_OFFSET_ARC*fdr_b,
+            -LB_OFFSET_STRAIGHT*fdc_a - LB_OFFSET_ARC*fdc_b):
+            return {'type':'ARC_BWD', 'direction':'LEFT',
                     'advance_cells': -1, 'delta_heading_deg': 90,
-                    'dt': ARC_COST,
-                    'from': (ra, ca, ta), 'to': (rb, cb, tb)}
+                    'dt': ARC_COST, 'from': a, 'to': b}
+
+        # Backward right arc
+        if tdir == 'RIGHT' and (rb - ra, cb - ca) == (
+            -RB_OFFSET_STRAIGHT*fdr_a - RB_OFFSET_ARC*fdr_b,
+            -RB_OFFSET_STRAIGHT*fdc_a - RB_OFFSET_ARC*fdc_b):
+            return {'type':'ARC_BWD', 'direction':'RIGHT',
+                    'advance_cells': -1, 'delta_heading_deg': 90,
+                    'dt': ARC_COST, 'from': a, 'to': b}
 
     # Fallback
     return {'type':'FWD', 'cells':1, 'dt': FORWARD_COST,
@@ -1118,7 +1131,7 @@ def animate_path(grid_blocked, obstacles_rc, scans_rc, visit_order, full_path, b
     total_frames = last_frame + 1
     ani = animation.FuncAnimation(
         fig, update, frames=total_frames,
-        init_func=init, interval=120, blit=True, repeat=False
+        init_func=init, interval=200, blit=True, repeat=False
     )
 
     plt.show()
@@ -1305,9 +1318,9 @@ def task1(json_payload=None):
     Accepts:
       - dict  (START_TASK-style payload)
       - None  (opens interactive placer)
-    Saves movement_trace.json next to this file.
+    Saves movement_trace.json next to this file and obstacle_visit_order.json.
     """
-    # 1) Obstacles + sides
+    # 1) Obstacles + sides (+ids)
     if json_payload is None:
         placer = InteractivePlacer()
         items = placer.run()
@@ -1326,6 +1339,9 @@ def task1(json_payload=None):
     # 2) Build blocked grid
     obstacles_rc = [it["rc"] for it in items]
     sides = [it["side"] for it in items]
+    # carry IDs (fallback to 1..N if missing in payload)
+    ids = [it.get("id", idx + 1) for idx, it in enumerate(items)]
+
     raw_grid = grid_with_obstacles(obstacles_rc)
     blocked = inflate_blocked(raw_grid, radius=INFLATE_RADIUS)
 
@@ -1334,7 +1350,6 @@ def task1(json_payload=None):
     r, c, theta = START_RC
     if start_override is not None:
         r, c, theta = start_override
-        
         START_RC = (r, c, theta)
 
     if blocked[r, c]:
@@ -1343,7 +1358,11 @@ def task1(json_payload=None):
         r, c, theta = new_start
 
     start_state = (r, c, theta)
-    obstacles_with_sides = [{"rc": rc, "side": s} for rc, s in zip(obstacles_rc, sides)]
+
+    # include 'id' so the planner can preserve mapping
+    obstacles_with_sides = [{"rc": rc, "side": s, "id": oid}
+                            for rc, s, oid in zip(obstacles_rc, sides, ids)]
+
     full_path, breaks, scans, order = plan_route_tsp(blocked, start_state, obstacles_with_sides)
 
     # 4) Build + save movement JSON (save into Algorithm folder)
@@ -1353,6 +1372,16 @@ def task1(json_payload=None):
     print("\n=== MOVEMENT TOKENS ===")
     print(token_str)
     print(f"\nSaved JSON trace to: {outfile}")
+
+    # --- NEW: save visit order as a 1-D JSON array of obstacle IDs ---
+    # 'order' is assumed to be indices into the original obstacles list.
+    visit_order_ids = [ids[i] for i in order] if order else []
+    order_outfile = os.path.join(out_dir, "obstacle_visit_order.json")
+    with open(order_outfile, "w") as f:
+        json.dump(visit_order_ids, f)
+    print(f"Visit order (IDs): {visit_order_ids}")
+    print(f"Saved obstacle visit order to: {order_outfile}")
+    # --- END NEW ---
 
     # 5) Animate if you want a UI (commented for headless use)
     # animate_path(blocked, obstacles_rc, scans, order, full_path, breaks)
