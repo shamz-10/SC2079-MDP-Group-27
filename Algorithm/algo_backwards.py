@@ -278,9 +278,11 @@ RF_OFFSET_ARC = 6
 LF_OFFSET_STRAIGHT = 4
 LF_OFFSET_ARC = 3
 
+#Logic is swap, this is for LEFT BACK TURNS
 RB_OFFSET_STRAIGHT = 2
 RB_OFFSET_ARC = 4
 
+#Logic is swap, this is for RIGHT BACK TURNS
 LB_OFFSET_STRAIGHT = 5
 LB_OFFSET_ARC = 7
 
@@ -1129,7 +1131,7 @@ def animate_path(grid_blocked, obstacles_rc, scans_rc, visit_order, full_path, b
     total_frames = last_frame + 1
     ani = animation.FuncAnimation(
         fig, update, frames=total_frames,
-        init_func=init, interval=120, blit=True, repeat=False
+        init_func=init, interval=200, blit=True, repeat=False
     )
 
     plt.show()
@@ -1316,9 +1318,9 @@ def task1(json_payload=None):
     Accepts:
       - dict  (START_TASK-style payload)
       - None  (opens interactive placer)
-    Saves movement_trace.json next to this file.
+    Saves movement_trace.json next to this file and obstacle_visit_order.json.
     """
-    # 1) Obstacles + sides
+    # 1) Obstacles + sides (+ids)
     if json_payload is None:
         placer = InteractivePlacer()
         items = placer.run()
@@ -1337,6 +1339,9 @@ def task1(json_payload=None):
     # 2) Build blocked grid
     obstacles_rc = [it["rc"] for it in items]
     sides = [it["side"] for it in items]
+    # carry IDs (fallback to 1..N if missing in payload)
+    ids = [it.get("id", idx + 1) for idx, it in enumerate(items)]
+
     raw_grid = grid_with_obstacles(obstacles_rc)
     blocked = inflate_blocked(raw_grid, radius=INFLATE_RADIUS)
 
@@ -1345,7 +1350,6 @@ def task1(json_payload=None):
     r, c, theta = START_RC
     if start_override is not None:
         r, c, theta = start_override
-        
         START_RC = (r, c, theta)
 
     if blocked[r, c]:
@@ -1354,7 +1358,11 @@ def task1(json_payload=None):
         r, c, theta = new_start
 
     start_state = (r, c, theta)
-    obstacles_with_sides = [{"rc": rc, "side": s} for rc, s in zip(obstacles_rc, sides)]
+
+    # include 'id' so the planner can preserve mapping
+    obstacles_with_sides = [{"rc": rc, "side": s, "id": oid}
+                            for rc, s, oid in zip(obstacles_rc, sides, ids)]
+
     full_path, breaks, scans, order = plan_route_tsp(blocked, start_state, obstacles_with_sides)
 
     # 4) Build + save movement JSON (save into Algorithm folder)
@@ -1365,9 +1373,19 @@ def task1(json_payload=None):
     print(token_str)
     print(f"\nSaved JSON trace to: {outfile}")
 
+    # --- NEW: save visit order as a 1-D JSON array of obstacle IDs ---
+    # 'order' is assumed to be indices into the original obstacles list.
+    visit_order_ids = [ids[i] for i in order] if order else []
+    order_outfile = os.path.join(out_dir, "obstacle_visit_order.json")
+    with open(order_outfile, "w") as f:
+        json.dump(visit_order_ids, f)
+    print(f"Visit order (IDs): {visit_order_ids}")
+    print(f"Saved obstacle visit order to: {order_outfile}")
+    # --- END NEW ---
+
     # 5) Animate if you want a UI (commented for headless use)
     animate_path(blocked, obstacles_rc, scans, order, full_path, breaks)
-
+    
 if __name__ == "__main__":
     # For manual testing you can still pass a JSON file path and we’ll load & run it.
     # (Kept for convenience in development.)
