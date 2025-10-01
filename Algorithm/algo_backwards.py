@@ -1274,7 +1274,7 @@ def _start_override_from_payload(payload_dict):
     try:
         # rx = int(robot.get("x")) * 2
         # ry = int(robot.get("y")) * 2
-        rx, ry = 0, 0
+        rx, ry = 0, 5
         rdir = str(robot.get("dir", "N")).upper()
         return (ry, rx, dir_map.get(rdir, START_RC[2]))
     except Exception:
