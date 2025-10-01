@@ -160,7 +160,7 @@ ROBOT_FOOTPRINT = 6         # robot is 3x3 cells
 INFLATE_RADIUS = 0
 
 OB_SIZE_CELLS = 2           # obstacle occupies 1x1 cell
-SCAN_OFFSET_CELLS = 4       # 2 cells = 20cm away from obstacle side
+SCAN_OFFSET_CELLS = 6       # 2 cells = 20cm away from obstacle side
 
 # Start state (row, col, heading°); (0,0) is BOTTOM-LEFT; rows grow upward now.
 # Headings are multiples of 90: 0=N, 90=E, 180=S, 270=W
@@ -272,7 +272,7 @@ TIME_LIMIT_S = 120.0
 
 SAMPLE_TRANSITIONS = True
 
-OFFSET_STRAIGHT = 3
+OFFSET_STRAIGHT = 6
 OFFSET_ARC = 6
 
 def dir_to_theta(dr, dc):
@@ -708,7 +708,7 @@ def movements_from_path(full_path, breaks, scans_rc, time_limit=TIME_LIMIT_S):
             dist = int(round(s['cells'] * CELL_CM))
             new_s['move_code'] = f"SB{dist:03d}"
         elif s['type'] == 'ARC_FWD':
-            new_s['move_code'] = "LF087" if s['direction'] == 'LEFT' else "RF087"
+            new_s['move_code'] = "LF089" if s['direction'] == 'LEFT' else "RF087"
         elif s['type'] == 'ARC_BWD':
             new_s['move_code'] = "RB087" if s['direction'] == 'LEFT' else "LB087"
         steps_out.append(new_s)
@@ -737,7 +737,7 @@ def movements_from_path(full_path, breaks, scans_rc, time_limit=TIME_LIMIT_S):
             else:
                 tokens.append(f"SB{dist:03d}")
         elif s['type'] == 'ARC_FWD':
-            tokens.append("LF087" if s['direction'] == 'LEFT' else "RF087")
+            tokens.append("LF089" if s['direction'] == 'LEFT' else "RF087")
         elif s['type'] == 'ARC_BWD':
             tokens.append("RB087" if s['direction'] == 'LEFT' else "LB087")
         elif s['type'] == 'RECOGNIZE':

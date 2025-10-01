@@ -70,9 +70,9 @@ class MovementTraceNavigator:
                 steps = 0
                 if cmd and len(cmd) >= 3 and cmd[0] == 'S':
                     try:
-                        steps = max(1, int(cmd[2:]) // 10)
+                        steps = max(2, int(cmd[2:]) // 10)
                     except Exception:
-                        steps = 1
+                        steps = 2
                 elif (cmd[0] == 'L' or cmd[0]== 'R'):
                     steps=1 #TODO: Change according to 1x3 turn
                 else:
@@ -133,6 +133,8 @@ class MovementTraceNavigator:
                 "path": seg["path"],
             }
         }
+
+        print("get_command_to_next_obstacle",out)
         return out
 
     def get_obstacle_id(self):
@@ -143,6 +145,7 @@ class MovementTraceNavigator:
         return current
 
     def has_task_ended(self):
+        print("segment_dx, segments", self.segment_idx, len(self.segments)+1)
         return self.segment_idx >= len(self.segments)
 
 
@@ -233,7 +236,7 @@ class PCClient:
                     print("[PC Client] PC Server disconnected remotely.")
                     self.reconnect()
 
-                print("[PC Client] Received message: first 100:", message[:100])
+                print("[PC Client] Received message: first 100:", message)
 
                 message = json.loads(message)
 
@@ -325,7 +328,11 @@ class PCClient:
                             destination_file = f"{destination_folder}/task2_result_obs_id_{obs_id}.jpg"
                         else:
                             destination_file = f"{destination_folder}/task1_result_obs_id_{obs_id}.jpg"
-                        image_path = image_prediction["image_path"] 
+                        # image_path = image_prediction["image_path"] 
+                        image_path = image_path # use the last captured image
+
+                        print("Image path: ",image_path)
+                        print("Destination file: ",destination_file)
                         shutil.copy(image_path, destination_file)
 
                         print(f"Image copied to {destination_file}")
@@ -339,7 +346,7 @@ class PCClient:
                         message = json.dumps(image_prediction)
                         
                         ######### For testing override ###############
-                        message = {"type": "IMAGE_RESULTS", "data": {"obs_id": f"{obs_id}", "img_id": "20"}}
+                        # message = {"type": "IMAGE_RESULTS", "data": {"obs_id": f"{obs_id}", "img_id": "20"}}
                         ######### end of temp test code ##############
 
                         self.msg_queue.put(message)
@@ -352,6 +359,7 @@ class PCClient:
 
                         # Update self.t1 to input new path, may put this above the image inference if we don't want to wait and stop
                         if not self.t1.has_task_ended():
+                            print("Sending next command")
                             command = self.t1.get_command_to_next_obstacle()
                             self.msg_queue.put(json.dumps(command))
                             obs_id = str(self.t1.get_obstacle_id())
