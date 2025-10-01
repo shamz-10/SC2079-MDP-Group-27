@@ -336,34 +336,14 @@ def cells_between(a, b):
     return cells
 
 def transition_collision_free(a, b, grid_blocked):
-    """Swept collision check along a->b with balanced heading checks."""
-    # End pose must be valid (full footprint at the end heading)
+    """Conservative collision check along the a->b transition."""
     if not collision_free_cell(b[0], b[1], grid_blocked, b[2]):
         return False
-
-    # If you want to quickly test that planning still works, you can
-    # temporarily bypass the sweep by returning True here.
-    # return True
-
-    # Dense sample of cells between a and b
-    (ra, ca, _), (rb, cb, _) = a, b
-    dr = rb - ra
-    dc = cb - ca
-    steps = max(abs(dr), abs(dc), 1)
-    for k in range(1, steps + 1):
-        r = ra + int(round(k * dr / steps))
-        c = ca + int(round(k * dc / steps))
-
-        # Check with start heading for first half of the sweep
-        # and end heading for the second half. This approximates
-        # the yaw change across an arc without over-rejecting.
-        if k <= steps // 2:
-            if not collision_free_cell(r, c, grid_blocked, a[2]):
-                return False
-        else:
-            if not collision_free_cell(r, c, grid_blocked, b[2]):
-                return False
-
+    if not SAMPLE_TRANSITIONS:
+        return True
+    for (r, c) in cells_between(a, b):
+        if not collision_free_cell(r, c, grid_blocked, a[2]):
+            return False
     return True
 
 
@@ -393,8 +373,8 @@ def motion_primitives(state):
     fwd_right_end = (r + OFFSET_STRAIGHT*dr + OFFSET_ARC*dr_r, c + OFFSET_STRAIGHT*dc + OFFSET_ARC*dc_r, theta_r)
 
     # BACKWARD ARCS: left/right 90° arc (reverse 1 cell and yaw ±90°)
-    bwd_left_end  = (r - OFFSET_STRAIGHT*dr - OFFSET_ARC*dr_l, c - OFFSET_STRAIGHT*dc - OFFSET_ARC*dc_l, theta_l)
-    bwd_right_end = (r - OFFSET_STRAIGHT*dr - OFFSET_ARC*dr_r, c - OFFSET_STRAIGHT*dc - OFFSET_ARC*dc_r, theta_r)
+    bwd_left_end  = (r - OFFSET_ARC*dr - OFFSET_STRAIGHT*dr_l, c - OFFSET_ARC*dc - OFFSET_STRAIGHT*dc_l, theta_l)
+    bwd_right_end = (r - OFFSET_ARC*dr - OFFSET_STRAIGHT*dr_r, c - OFFSET_ARC*dc - OFFSET_STRAIGHT*dc_r, theta_r)
 
     # Calculate Dubins costs for all arcs
     start_x = c * CELL_CM
@@ -424,8 +404,8 @@ def motion_primitives(state):
     )
     
     # Backward left arc
-    bwd_left_x = (c - OFFSET_STRAIGHT*dc - OFFSET_ARC*dc_l) * CELL_CM
-    bwd_left_y = (r - OFFSET_STRAIGHT*dr - OFFSET_ARC*dr_l) * CELL_CM
+    bwd_left_x = (c - OFFSET_ARC*dc - OFFSET_STRAIGHT*dc_l) * CELL_CM
+    bwd_left_y = (r - OFFSET_ARC*dr - OFFSET_STRAIGHT*dr_l) * CELL_CM
     bwd_left_theta_rad = math.radians(theta_l)
     bwd_left_cost = dubins_path_cost(
         (start_x, start_y, start_theta_rad),
@@ -435,8 +415,8 @@ def motion_primitives(state):
     )
     
     # Backward right arc
-    bwd_right_x = (c - OFFSET_STRAIGHT*dc - OFFSET_ARC*dc_r) * CELL_CM
-    bwd_right_y = (r - OFFSET_STRAIGHT*dr - OFFSET_ARC*dr_r) * CELL_CM
+    bwd_right_x = (c - OFFSET_ARC*dc - OFFSET_STRAIGHT*dc_r) * CELL_CM
+    bwd_right_y = (r - OFFSET_ARC*dr - OFFSET_STRAIGHT*dr_r) * CELL_CM
     bwd_right_theta_rad = math.radians(theta_r)
     bwd_right_cost = dubins_path_cost(
         (start_x, start_y, start_theta_rad),
@@ -555,7 +535,7 @@ def _step_cost(a, b):
             return ARC_COST
         
         # Backward arc: reverse in original direction + lateral in new direction  
-        if (rb - ra, cb - ca) == (-OFFSET_STRAIGHT*fdr_a - OFFSET_ARC*fdr_b, -OFFSET_STRAIGHT*fdc_a - OFFSET_ARC*fdc_b):
+        if (rb - ra, cb - ca) == (-OFFSET_ARC*fdr_a - OFFSET_STRAIGHT*fdr_b, -OFFSET_ARC*fdc_a - OFFSET_STRAIGHT*fdc_b):
             return ARC_COST
     
     # Fallback to forward cost
@@ -620,7 +600,7 @@ def _primitive_from_edge(a, b):
                     'from': (ra, ca, ta), 'to': (rb, cb, tb)}
         
         # Backward arc
-        if (rb - ra, cb - ca) == (-OFFSET_STRAIGHT*fdr_a - OFFSET_ARC*fdr_b, -OFFSET_STRAIGHT*fdc_a - OFFSET_ARC*fdc_b):
+        if (rb - ra, cb - ca) == (-OFFSET_ARC*fdr_a - OFFSET_STRAIGHT*fdr_b, -OFFSET_ARC*fdc_a - OFFSET_STRAIGHT*fdc_b):
             return {'type':'ARC_BWD', 'direction': tdir,
                     'advance_cells': -1, 'delta_heading_deg': 90,
                     'dt': ARC_COST,

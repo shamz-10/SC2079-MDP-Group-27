@@ -1,2 +1,1 @@
-
-    # Dense sample of cells between a and b
+OFFSET_STRAIGHT
