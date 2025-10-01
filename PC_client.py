@@ -346,7 +346,7 @@ class PCClient:
                         message = json.dumps(image_prediction)
                         
                         ######### For testing override ###############
-                        # message = {"type": "IMAGE_RESULTS", "data": {"obs_id": f"{obs_id}", "img_id": "20"}}
+                        # message = json.dumps({"type": "IMAGE_RESULTS", "data": {"obs_id": f"{obs_id}", "img_id": "20"}})
                         ######### end of temp test code ##############
 
                         self.msg_queue.put(message)
@@ -366,7 +366,7 @@ class PCClient:
                         else:
                             if not self.task_2:
                                 print("[Algo] Task 1 ended")
-                                stitching_images(r'images_result', r'image_recognition\stitched_image.jpg')
+                                stitching_images(r'images_result', r'image_recognition/stitched_image.jpg')
                                 break # exit thread
 
                         self.image_record = [] # reset the image record
