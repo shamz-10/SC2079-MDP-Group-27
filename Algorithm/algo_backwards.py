@@ -1322,7 +1322,7 @@ def task1(json_payload=None):
     print(f"\nSaved JSON trace to: {outfile}")
 
     # 5) Animate if you want a UI (commented for headless use)
-    animate_path(blocked, obstacles_rc, scans, order, full_path, breaks)
+    # animate_path(blocked, obstacles_rc, scans, order, full_path, breaks)
 
 if __name__ == "__main__":
     # For manual testing you can still pass a JSON file path and we’ll load & run it.

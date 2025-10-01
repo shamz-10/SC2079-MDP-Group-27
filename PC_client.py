@@ -31,7 +31,7 @@ class MovementTraceNavigator:
     def __init__(self):
         self.segments = []       # list of {"commands": [...], "path": [[r,c], ...]}
         self.segment_idx = 0
-        self.obs_id = 0
+        self.obs_id = 1
         self.trace = None
 
     def _load_trace(self, path="movement_trace.json"):
@@ -300,8 +300,9 @@ class PCClient:
                             else:
                                 break
                         
+                        # TODO: Implement function to handle no prediction
                         # If still can't find a prediction, repeat the last command
-                        if image_prediction['data']['img_id'] == None:# and NUM_OF_RETRIES > retries:
+                        # if image_prediction['data']['img_id'] == None:# and NUM_OF_RETRIES > retries:
                             
                             # if command['type'] == 'FASTEST_PATH':
                             #     image_prediction['data']['img_id'] = "38" # 38 is right, 39 is left
@@ -314,7 +315,7 @@ class PCClient:
 
                             # self.msg_queue.put(json.dumps(command))
                             # retries += 1
-                            continue
+                            # continue
                         
 
                         # copy image to images_result folder and rename them according to obs_id
@@ -327,23 +328,27 @@ class PCClient:
                         image_path = image_prediction["image_path"] 
                         shutil.copy(image_path, destination_file)
 
+                        print(f"Image copied to {destination_file}")
+
                         # Remove unnecessary data
                         del image_prediction["data"]["bbox_area"]
                         del image_prediction["image_path"]
 
+
                         print("before detection send")
                         message = json.dumps(image_prediction)
+                        
+                        ######### For testing override ###############
+                        message = {"type": "IMAGE_RESULTS", "data": {"obs_id": f"{obs_id}", "img_id": "20"}}
+                        ######### end of temp test code ##############
+
                         self.msg_queue.put(message)
                         print("after msg queue put message")
                         # self.t1.update_image_id(image_prediction['data']['img_id'])
                         image_counter = 0
                         retries = 0
                         if self.task_2:
-                            obs_id += 1 # because PC server doesn't send ID
-
-                        # For testing
-                        # message = {"type": "IMAGE_RESULTS", "data": {"obs_id": "3", "img_id": "20"}}
-                        # end of temp test code
+                            obs_id += 1       
 
                         # Update self.t1 to input new path, may put this above the image inference if we don't want to wait and stop
                         if not self.t1.has_task_ended():
