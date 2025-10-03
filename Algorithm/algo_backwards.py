@@ -175,13 +175,20 @@ DIR_FOR_SIDE = {
 }
 
 OFFSET_STRAIGHT = 1
-OFFSET_ARC = 2
+OFFSET_ARC = 3
 
 # =========================
 # Grid helpers
 # =========================
+# def in_bounds(r, c):
+#     return 0 <= r < NCELLS and 0 <= c < NCELLS
+
 def in_bounds(r, c):
-    return 0 <= r < NCELLS and 0 <= c < NCELLS
+    # For a 3x3 robot, check that the full footprint is inside the grid
+    return (
+        0 <= r - INFLATE_RADIUS and r + INFLATE_RADIUS < NCELLS and
+        0 <= c - INFLATE_RADIUS and c + INFLATE_RADIUS < NCELLS
+    )
 
 def grid_with_obstacles(obstacles_rc):
     """Return a boolean grid (True=blocked) with raw obstacles."""
@@ -653,9 +660,27 @@ def movements_from_path(full_path, breaks, scans_rc, time_limit=TIME_LIMIT_S):
             dist = int(round(s['cells'] * CELL_CM))
             new_s['move_code'] = f"SB{dist:03d}"
         elif s['type'] == 'ARC_FWD':
-            new_s['move_code'] = "LF087" if s['direction'] == 'LEFT' else "RF087"
+            if s['direction']=='LEFT':
+                # steps_out.append(dict(new_s, move_code="SB003"))
+                steps_out.append(dict(new_s, move_code="LF090"))
+            else:   
+                steps_out.append(dict(new_s, move_code="RF090"))
+            continue
+
         elif s['type'] == 'ARC_BWD':
-            new_s['move_code'] = "RB087" if s['direction'] == 'LEFT' else "LB087"
+            if s['direction']=='LEFT':
+                # steps_out.append(dict(new_s, move_code="SB007"))
+                # new_s['move_code'] = "RB090"
+                steps_out.append(dict(new_s, move_code="RB090"))
+                # steps_out.append(dict(new_s, move_code="SB003"))
+
+            else:   
+                # steps_out.append(dict(new_s, move_code="SB003"))
+
+                steps_out.append(dict(new_s, move_code="LB090"))
+                # steps_out.append(dict(new_s, move_code="SF005"))
+            continue
+
         steps_out.append(new_s)
 
         if abs(t - time_limit) <= 1e-9:
@@ -663,16 +688,41 @@ def movements_from_path(full_path, breaks, scans_rc, time_limit=TIME_LIMIT_S):
 
     tokens = []
     for s in steps_out:
+        # if s['type'] == 'FWD':
+        #     dist = int(round(s['cells'] * CELL_CM))
+        #     tokens.append(f"SF{dist:03d}")
+        # elif s['type'] == 'BWD':
+        #     dist = int(round(s['cells'] * CELL_CM))
+        #     tokens.append(f"SB{dist:03d}")
         if s['type'] == 'FWD':
             dist = int(round(s['cells'] * CELL_CM))
-            tokens.append(f"SF{dist:03d}")
+            while dist > 100:
+                tokens.append("SF100")
+                dist -= 100
+            if dist > 0:
+                tokens.append(f"SF{dist:03d}")
         elif s['type'] == 'BWD':
             dist = int(round(s['cells'] * CELL_CM))
-            tokens.append(f"SB{dist:03d}")
+            while dist > 100:
+                tokens.append("SB100")
+                dist -= 100
+            if dist > 0:
+                tokens.append(f"SB{dist:03d}")
         elif s['type'] == 'ARC_FWD':
-            tokens.append("LF087" if s['direction'] == 'LEFT' else "RF087")
+            if s['direction']=='LEFT':
+                tokens.append("SB003")
+                tokens.append("LF090")
+            else:
+                tokens.append("RF090")
         elif s['type'] == 'ARC_BWD':
-            tokens.append("RB087" if s['direction'] == 'LEFT' else "LB087")
+            if s['direction']=='LEFT':
+                tokens.append("SB003")
+                tokens.append("LB090")
+                tokens.append("SF005")
+            else:
+                tokens.append("SB007")
+                tokens.append("RB090")
+                tokens.append("SB003")
         elif s['type'] == 'RECOGNIZE':
             tokens.append("IMAGE")
 
@@ -1251,7 +1301,7 @@ def task1(json_payload=None):
     # --- END NEW ---
 
     # 5) Animate path
-    animate_path(blocked, obstacles_rc, scans, order, full_path, breaks)
+    # animate_path(blocked, obstacles_rc, scans, order, full_path, breaks)
 
 if __name__ == "__main__":
     # For manual testing you can still pass a JSON file path and we’ll load & run it.

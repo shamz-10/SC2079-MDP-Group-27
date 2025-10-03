@@ -199,7 +199,7 @@ class PCClient:
                 while exception:
                     try:
                         self.client_socket.sendall(self.prepend_msg_size(message))
-                        print("[PC Client] Write to RPI: first 100=", message)
+                        print("[PC Client] Write to RPI: first 100=", message[:100])
                     except Exception as e:
                         print("[PC Client] ERROR: Failed to write to RPI -", str(e))
                         self.reconnect()
@@ -302,20 +302,20 @@ class PCClient:
                                 break
                         
                         # If still can't find a prediction, repeat the last command
-                        if image_prediction['data']['img_id'] == None and NUM_OF_RETRIES > retries:
+                        # if image_prediction['data']['img_id'] == None and NUM_OF_RETRIES > retries:
                             
-                            if command['type'] == 'FASTEST_PATH':
-                                image_prediction['data']['img_id'] = "38" # 38 is right, 39 is left
-                            else:
-                                last_path = command['data']['path'][-1]
-                                if (retries+1)%2==0:
-                                    command = {"type": "NAVIGATION", "data": {"commands": ['RF010','RB010'], "path": [last_path, last_path]}}
-                                else:
-                                    command = {"type": "NAVIGATION", "data": {"commands": ['RB010','RF010'], "path": [last_path, last_path]}}
+                        #     if command['type'] == 'FASTEST_PATH':
+                        #         image_prediction['data']['img_id'] = "38" # 38 is right, 39 is left
+                        #     else:
+                        #         last_path = command['data']['path'][-1]
+                        #         if (retries+1)%2==0:
+                        #             command = {"type": "NAVIGATION", "data": {"commands": ['RF010','RB010'], "path": [last_path, last_path]}}
+                        #         else:
+                        #             command = {"type": "NAVIGATION", "data": {"commands": ['RB010','RF010'], "path": [last_path, last_path]}}
 
-                            self.msg_queue.put(json.dumps(command))
-                            retries += 1
-                            continue
+                        #     self.msg_queue.put(json.dumps(command))
+                        #     retries += 1
+                        #     continue
                             
                         # # For checklist A.5
                         # else:
