@@ -8,16 +8,17 @@ import shutil
 import base64
 
 from image_recognition import model_inference
-from Algorithm import algo_backwards as algo # use algo.py to generate movement_trace.json
+from image_recognition.stitch_images import stitching_images
+from Algorithm import algo_backwards as algo # Using updated algo_backwards
 
 # Configuration
-TASK_2 = False  # TODO: Change to False for task 1, True for task 2
+TASK_2 = False  #TODO: Change to False for task 1, True for task 2
 
 # Constants
 RPI_IP = "192.168.27.27"  # Replace with the Raspberry Pi's IP address
 PC_PORT = 8888            # Replace with the port used by the PC server
 PC_BUFFER_SIZE = 1024
-NUM_OF_RETRIES = 2
+# NUM_OF_RETRIES = 2
 
 
 class MovementTraceNavigator:
@@ -30,8 +31,9 @@ class MovementTraceNavigator:
     def __init__(self):
         self.segments = []       # list of {"commands": [...], "path": [[r,c], ...]}
         self.segment_idx = 0
-        self.obs_id = 0
+        self.obs_id = 1
         self.trace = None
+        self.obs_order = []
 
     def _load_trace(self, path="movement_trace.json"):
         with open(path, "r") as f:
@@ -46,6 +48,15 @@ class MovementTraceNavigator:
         path = self.trace["data"]["path"]
         segments = []
 
+        def scale_path_to_20x20(path):
+            scaled = []
+            for r, c in path:
+                new_r = (r - 1) // 2 + 1
+                new_c = (c - 1) // 2 + 1
+                if not scaled or scaled[-1] != [new_r, new_c]:  # avoid duplicates
+                    scaled.append([new_r, new_c])
+            return scaled
+
         i_cmd = 0
         i_path = 0  # index into path states; starts at 0
 
@@ -57,11 +68,11 @@ class MovementTraceNavigator:
             while i_cmd < len(cmds):
                 cmd = cmds[i_cmd]
                 seg_cmds.append(cmd)
-                print("cmd appended", cmd)
+                # print("cmd appended", cmd)
                 i_cmd += 1
 
                 if i_cmd < len(cmds) and cmd == "IMAGE":
-                    continue
+                    break
 
                 # Advance along path according to command semantics
                 # Straight moves are encoded like SB050, SF140 (distance in mm/10)
@@ -69,15 +80,16 @@ class MovementTraceNavigator:
                 steps = 0
                 if cmd and len(cmd) >= 3 and cmd[0] == 'S':
                     try:
-                        steps = max(1, int(cmd[2:]) // 10)
+                        # steps = max(2, int(cmd[2:]) // 5)
+                        steps = max(2, int(cmd[2:]) // 10)
                     except Exception:
-                        steps = 1
+                        steps = 2
                 elif (cmd[0] == 'L' or cmd[0]== 'R'):
-                    steps=1
+                    steps=1 #TODO: Change according to 1x3 turn
                 else:
                     steps = 0
                 
-                print("print cmd, steps:",cmd, steps)
+                # print("print cmd, steps:",cmd, steps)
 
                 # Move i_path forward but never past the final state
                 if steps > 0:
@@ -86,17 +98,94 @@ class MovementTraceNavigator:
             # segment path is states [start..i_path] inclusive
             seg_path = path[start_path_idx:i_path+1] if i_path >= start_path_idx else [path[start_path_idx]]
 
+            # seg_path = scale_path_to_20x20(seg_path)
+
             if seg_cmds or seg_path:
                 segments.append({"commands": seg_cmds, "path": seg_path})
 
             # consume IMAGE_REC boundary (don’t move along path)
             # if i_cmd < len(cmds) and cmds[i_cmd] == "IMAGE":
             #     i_cmd += 1
-
+        print("Segments:", segments)
 
         self.segments = segments
         self.segment_idx = 0
         self.obs_id = 0
+    
+    def _load_obstacle_order(self, path="Algorithm/obstacle_visit_order.json"):
+        with open(path, "r") as f:
+            obstacles = json.load(f)
+        self.obs_order = obstacles
+        print("Obstacle order:", self.obs_order)
+
+    def calculate_new_path(self, json_commands): 
+        "calculate separate set of coordinates from movement commands"
+
+        pos = [1, 1]
+        new_path = [pos.copy()]
+
+        direction = 'N'  # Start facing North
+
+        dir_map = {'N': (0, 1), 'E': (1, 0), 'S': (0, -1), 'W': (-1, 0)}
+        right_turn = {'N': 'E', 'E': 'S', 'S': 'W', 'W': 'N'}
+        left_turn = {'N': 'W', 'W': 'S', 'S': 'E', 'E': 'N'}
+
+        turn_offset_map_right = {
+            'N': (2, 2),
+            'E': (2, -2),
+            'S': (-2, -2),
+            'W': (-2, 2)
+        }
+
+        turn_offset_map_left = {
+            'N': (-2, 2),
+            'E': (2, 2),
+            'S': (2, -2),
+            'W': (-2, -2)
+        }
+
+        for cmd in json_commands:
+            dr, dc = dir_map[direction]
+            if cmd.startswith("SF") or cmd.startswith("SB"):
+                # Straight movement, forward or backward
+                distance = int(cmd[2:])
+                steps = distance // 10
+                if cmd.startswith("SB"):  # backward
+                    dr, dc = -dr, -dc
+                for _ in range(steps):
+                    pos[0] += dr
+                    pos[1] += dc
+                    new_path.append(pos.copy())
+            elif cmd.startswith("LF"):
+                # Left turn with 2x2 offset
+                offset_r, offset_c = turn_offset_map_left[direction]
+                pos[0] += offset_r
+                pos[1] += offset_c
+                new_path.append(pos.copy())
+                direction = left_turn[direction]
+            elif cmd.startswith("RF"):
+                # Right turn with 2x2 offset
+                offset_r, offset_c = turn_offset_map_right[direction]
+
+                pos[0] += offset_r
+                pos[1] += offset_c
+                new_path.append(pos.copy())
+                direction = right_turn[direction]
+            elif cmd.startswith("LB"):
+                # Left back turn with 2x2 offset (reverse direction)
+                offset_r, offset_c = turn_offset_map_right[direction]
+                pos[0] -= offset_r
+                pos[1] -= offset_c
+                new_path.append(pos.copy())
+                direction = right_turn[direction]
+            elif cmd.startswith("RB"):
+                # Right back turn with 2x2 offset (reverse direction)
+                offset_r, offset_c = turn_offset_map_left[direction]
+                pos[0] -= offset_r
+                pos[1] -= offset_c
+                new_path.append(pos.copy())
+                direction = left_turn[direction]
+        return new_path
 
     def generate_path(self, message):
         """
@@ -112,7 +201,11 @@ class MovementTraceNavigator:
 
         # Load and prepare segments
         self._load_trace("Algorithm/movement_trace.json")
+        # new_path = self.calculate_new_path(self.trace["data"]["commands"])
+        # print("new_path:   ", new_path)
+        # self._split_into_segments(new_path)
         self._split_into_segments()
+        self._load_obstacle_order()
 
     def get_command_to_next_obstacle(self):
         """
@@ -132,6 +225,8 @@ class MovementTraceNavigator:
                 "path": seg["path"],
             }
         }
+
+        print("get_command_to_next_obstacle",out)
         return out
 
     def get_obstacle_id(self):
@@ -142,6 +237,7 @@ class MovementTraceNavigator:
         return current
 
     def has_task_ended(self):
+        print("segment_dx, segments", self.segment_idx, len(self.segments)+1)
         return self.segment_idx >= len(self.segments)
 
 
@@ -199,7 +295,7 @@ class PCClient:
                 while exception:
                     try:
                         self.client_socket.sendall(self.prepend_msg_size(message))
-                        print("[PC Client] Write to RPI: first 100=", message[:100])
+                        print("[PC Client] Write to RPI: first 100=", message[:200])
                     except Exception as e:
                         print("[PC Client] ERROR: Failed to write to RPI -", str(e))
                         self.reconnect()
@@ -232,7 +328,7 @@ class PCClient:
                     print("[PC Client] PC Server disconnected remotely.")
                     self.reconnect()
 
-                print("[PC Client] Received message: first 100:", message)
+                print("[PC Client] Received message: first 100:", message[:200])
 
                 message = json.loads(message)
 
@@ -290,8 +386,6 @@ class PCClient:
                     image_counter += 1
                     print(image_prediction)
 
-                    print("image prediction")
-
                     if message["final_image"] == True:
                         
                         # Get last prediction and move forward
@@ -301,26 +395,23 @@ class PCClient:
                             else:
                                 break
                         
+                        # TODO: Implement function to handle no prediction
                         # If still can't find a prediction, repeat the last command
-                        # if image_prediction['data']['img_id'] == None and NUM_OF_RETRIES > retries:
+                        # if image_prediction['data']['img_id'] == None:# and NUM_OF_RETRIES > retries:
                             
-                        #     if command['type'] == 'FASTEST_PATH':
-                        #         image_prediction['data']['img_id'] = "38" # 38 is right, 39 is left
-                        #     else:
-                        #         last_path = command['data']['path'][-1]
-                        #         if (retries+1)%2==0:
-                        #             command = {"type": "NAVIGATION", "data": {"commands": ['RF010','RB010'], "path": [last_path, last_path]}}
-                        #         else:
-                        #             command = {"type": "NAVIGATION", "data": {"commands": ['RB010','RF010'], "path": [last_path, last_path]}}
+                            # if command['type'] == 'FASTEST_PATH':
+                            #     image_prediction['data']['img_id'] = "38" # 38 is right, 39 is left
+                            # else:
+                            #     last_path = command['data']['path'][-1]
+                            #     if (retries+1)%2==0:
+                            #         command = {"type": "NAVIGATION", "data": {"commands": ['RF010','RB010'], "path": [last_path, last_path]}}
+                            #     else:
+                            #         command = {"type": "NAVIGATION", "data": {"commands": ['RB010','RF010'], "path": [last_path, last_path]}}
 
-                        #     self.msg_queue.put(json.dumps(command))
-                        #     retries += 1
-                        #     continue
-                            
-                        # # For checklist A.5
-                        # else:
-                        #     print("[Algo] Find the non-bulleye ended")
-                        #     return
+                            # self.msg_queue.put(json.dumps(command))
+                            # retries += 1
+                            # continue
+                        
 
                         # copy image to images_result folder and rename them according to obs_id
                         destination_folder = "images_result"
@@ -328,38 +419,47 @@ class PCClient:
                         if self.task_2:
                             destination_file = f"{destination_folder}/task2_result_obs_id_{obs_id}.jpg"
                         else:
-                            destination_file = f"{destination_folder}/task1_result_obs_id_{obs_id}.jpg"
-                        image_path = image_prediction["image_path"] 
+                            destination_file = f"{destination_folder}/task1_result_obs_id_{self.t1.obs_order[int(obs_id)]}.jpg"
+                        # image_path = image_prediction["image_path"] 
+                        image_path = image_path # use the last captured image
+
+                        print("Image path: ",image_path)
+                        print("Destination file: ",destination_file)
                         shutil.copy(image_path, destination_file)
+
+                        print(f"Image copied to {destination_file}")
 
                         # Remove unnecessary data
                         del image_prediction["data"]["bbox_area"]
                         del image_prediction["image_path"]
 
+
                         print("before detection send")
                         message = json.dumps(image_prediction)
+                        
+                        ######### For testing override ###############
+                        # message = json.dumps({"type": "IMAGE_RESULTS", "data": {"obs_id": f"{obs_id}", "img_id": "20"}})
+                        ######### end of temp test code ##############
+
                         self.msg_queue.put(message)
                         print("after msg queue put message")
                         # self.t1.update_image_id(image_prediction['data']['img_id'])
                         image_counter = 0
                         retries = 0
                         if self.task_2:
-                            obs_id += 1 # because PC server doesn't send ID
-
-                        # For testing
-                        # message = {"type": "IMAGE_RESULTS", "data": {"obs_id": "3", "img_id": "20"}}
-                        # end of temp test code
+                            obs_id += 1       
 
                         # Update self.t1 to input new path, may put this above the image inference if we don't want to wait and stop
-                        # if not self.t1.has_task_ended():
-                        #     command = self.t1.get_command_to_next_obstacle()
-                        #     self.msg_queue.put(json.dumps(command))
-                        #     obs_id = str(self.t1.get_obstacle_id())
-                        # else:
-                        #     if not self.task_2:
-                        #         print("[Algo] Task 1 ended")
-                        #         stitching_images(r'images_result', r'image_recognition\stitched_image.jpg')
-                        #         break # exit thread
+                        if not self.t1.has_task_ended():
+                            print("Sending next command")
+                            command = self.t1.get_command_to_next_obstacle()
+                            self.msg_queue.put(json.dumps(command))
+                            obs_id = str(self.t1.get_obstacle_id())
+                        else:
+                            if not self.task_2:
+                                print("[Algo] Task 1 ended")
+                                stitching_images(r'images_result', r'image_recognition/stitched_image.jpg')
+                                break # exit thread
 
                         self.image_record = [] # reset the image record
 
@@ -389,23 +489,13 @@ if __name__ == "__main__":
     PC_client_receive.start()
     print("[PC Client] Listening thread started successfully")
 
-
-    # command = {
-    # "type": "NAVIGATION",
-    # "data": {
-    #     "commands": [
-    #         "SF010",
-            
-            
-        
-    #         "IMAGE"
-    #     ],
-    #     "path": []  # Optionally fill this with the corresponding path if needed
-    #     }
-    # }
-    # client.msg_queue.put(json.dumps(command))
-
     # Optionally join:
     PC_client_receive.join()
     PC_client_send.join()
+    # print("[PC Client] All threads concluded, cleaning up...")
+
     client.disconnect()
+
+
+    # For testing task 1 path generation
+    # client.t1.generate_path({"type":"START_TASK","data":{"obstacles_file":"obstacles.json"}})
