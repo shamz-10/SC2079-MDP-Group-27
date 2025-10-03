@@ -721,9 +721,9 @@ def movements_from_path(full_path, breaks, scans_rc, time_limit=TIME_LIMIT_S):
             dist = int(round(s['cells'] * CELL_CM))
             new_s['move_code'] = f"SB{dist:03d}"
         elif s['type'] == 'ARC_FWD':
-            new_s['move_code'] = "LF088" if s['direction'] == 'LEFT' else "RF088"
+            new_s['move_code'] = "LF087" if s['direction'] == 'LEFT' else "RF087"
         elif s['type'] == 'ARC_BWD':
-            new_s['move_code'] = "RB088" if s['direction'] == 'LEFT' else "LB088"
+            new_s['move_code'] = "RB087" if s['direction'] == 'LEFT' else "LB087"
         steps_out.append(new_s)
 
         if abs(t - time_limit) <= 1e-9:
@@ -750,13 +750,44 @@ def movements_from_path(full_path, breaks, scans_rc, time_limit=TIME_LIMIT_S):
             else:
                 tokens.append(f"SB{dist:03d}")
         elif s['type'] == 'ARC_FWD':
-            tokens.append("LF088" if s['direction'] == 'LEFT' else "RF088")
+            tokens.append("LF087" if s['direction'] == 'LEFT' else "RF087")
         elif s['type'] == 'ARC_BWD':
-            tokens.append("RB088" if s['direction'] == 'LEFT' else "LB088")
+            tokens.append("RB087" if s['direction'] == 'LEFT' else "LB087")
         elif s['type'] == 'RECOGNIZE':
             tokens.append("IMAGE")
 
-    path_coords = [[c+1, r+1] for (r, c, theta) in full_path]
+    # path_coords = [[c+1, r+1] for (r, c, theta) in full_path]
+    center_coords = []
+    for (r, c, theta) in full_path:
+        # Compute center from anchor (r, c) and orientation
+        half = ROBOT_FOOTPRINT // 2
+        if ROBOT_FOOTPRINT % 2 == 0:
+            # Even footprint (e.g., 6x6)
+            if theta == 0:    # North
+                center_r = r + 2
+                center_c = c + 2
+            elif theta == 90: # East
+                center_r = r - 2
+                center_c = c + 2
+            elif theta == 180: # South
+                center_r = r - 2
+                center_c = c - 2
+            elif theta == 270: # West
+                center_r = r + 2
+                center_c = c - 2
+            else:
+                center_r, center_c = r, c
+        else:
+            # Odd footprint (e.g., 3x3)
+            center_r = r + half
+            center_c = c + half
+        center_coords.append([center_c, center_r])
+    path_coords = center_coords
+    print(full_path)
+    print(path_coords)
+
+    # Floor divide each coordinate in path_coords by 2
+    path_coords = [[coord // 2 for coord in pt] for pt in path_coords]
 
     trace = {
         "type": "NAVIGATION",
