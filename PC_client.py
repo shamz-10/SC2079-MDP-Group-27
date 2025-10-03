@@ -420,8 +420,9 @@ class PCClient:
                             destination_file = f"{destination_folder}/task2_result_obs_id_{obs_id}.jpg"
                         else:
                             destination_file = f"{destination_folder}/task1_result_obs_id_{self.t1.obs_order[int(obs_id)]}.jpg"
-                        # image_path = image_prediction["image_path"] 
-                        image_path = image_path # use the last captured image
+                        #hopefully this solves the stitching image to used the YOLO processed image
+                        image_path = image_prediction["image_path"] 
+                        # image_path = image_path # use the last captured image
 
                         print("Image path: ",image_path)
                         print("Destination file: ",destination_file)
