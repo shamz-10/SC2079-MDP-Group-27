@@ -159,7 +159,7 @@ ROBOT_FOOTPRINT = 3         # robot is 3x3 cells
 INFLATE_RADIUS = (ROBOT_FOOTPRINT - 1)//2  # = 1
 
 OB_SIZE_CELLS = 1           # obstacle occupies 1x1 cell
-SCAN_OFFSET_CELLS = 2       # 2 cells = 20cm away from obstacle side
+SCAN_OFFSET_CELLS = 3       # 2 cells = 20cm away from obstacle side
 
 # Start state (row, col, heading°); (0,0) is BOTTOM-LEFT; rows grow upward now.
 # Headings are multiples of 90: 0=N, 90=E, 180=S, 270=W
