@@ -788,6 +788,28 @@ def movements_from_path(full_path, breaks, scans_rc, time_limit=TIME_LIMIT_S):
                 tokens.append("SB002")
         elif s['type'] == 'RECOGNIZE':
             tokens.append("IMAGE")
+    
+    cleaned = []
+    i = 0
+    while i < len(tokens):
+        # Check if we have a pattern "SB010", "SF010", "IMAGE"
+        if (i + 2 < len(tokens)
+            and tokens[i].startswith("SB")
+            and tokens[i + 1].startswith("SF")
+            and tokens[i + 2] == "IMAGE"):
+            try:
+                dist_back = int(tokens[i][2:])
+                dist_fwd = int(tokens[i + 1][2:])
+            except ValueError:
+                dist_back = dist_fwd = 0
+            # If both moves ≤ 10 cm (one cell), drop them
+            if dist_back == 10 and dist_fwd == 10:
+                # Skip the back and forward moves entirely
+                i += 2
+                continue
+        cleaned.append(tokens[i])
+        i += 1
+    tokens = cleaned
 
     path_coords = [[c, r] for (r, c, theta) in full_path]
 
