@@ -724,18 +724,20 @@ def movements_from_path(full_path, breaks, scans_rc, time_limit=TIME_LIMIT_S):
             if s['direction']=='LEFT':
                 tokens.append("SB003")
                 tokens.append("LF090")
+                tokens.append("SF001")
             else:
+                tokens.append("SB004")
+                tokens.append("RF089")
                 tokens.append("SB002")
-                tokens.append("RF090")
         elif s['type'] == 'ARC_BWD':
             if s['direction']=='LEFT':
-                tokens.append("SB005")
-                tokens.append("RB090")
-                tokens.append("SF003")
-            else:
                 tokens.append("SB003")
-                tokens.append("LB090")
-                tokens.append("SF002")
+                tokens.append("RB088")
+                tokens.append("SF007")
+            else:
+                tokens.append("SB007")
+                tokens.append("LB087")
+                tokens.append("SB002")
         elif s['type'] == 'RECOGNIZE':
             tokens.append("IMAGE")
 
