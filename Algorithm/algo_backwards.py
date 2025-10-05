@@ -292,22 +292,70 @@ def collision_free_cell(r, c, grid_blocked):
 
 def cells_between(a, b):
     """
-    Conservative sampler of cells from a->b (ignores θ).
+    Conservative sampler of grid cells between states a -> b.
+    Now explicitly handles forward/backward straights and 90° arc turns
+    using known geometric sweep patterns instead of generic interpolation.
     """
-    (ra, ca, _), (rb, cb, _) = a, b
-    r, c = ra, ca
-    dr = 1 if rb > ra else (-1 if rb < ra else 0)
-    dc = 1 if cb > ca else (-1 if cb < ca else 0)
+    (ra, ca, ta) = a
+    (rb, cb, tb) = b
     cells = []
-    while (r, c) != (rb, cb):
-        if abs(rb - r) >= abs(cb - c):
-            r += dr
-        else:
-            c += dc
-        cells.append((r, c))
-        if len(cells) > 4:
-            break
-    return cells
+
+    heading_change = (tb - ta) % 360
+    fdr_a, fdc_a = DIRS[ta]  # forward direction from start
+    fdr_b, fdc_b = DIRS[tb]  # forward direction after turn
+
+    #Straight motion
+    if heading_change == 0:
+        dr = 1 if rb > ra else (-1 if rb < ra else 0)
+        dc = 1 if cb > ca else (-1 if cb < ca else 0)
+        r, c = ra, ca
+        while (r, c) != (rb, cb):
+            if abs(rb - r) >= abs(cb - c):
+                r += dr
+            else:
+                c += dc
+            cells.append((r, c))
+            if len(cells) >= 4:
+                break
+        return cells
+
+    # === 2) 90° FORWARD arcs (right or left) ===
+    # Example: ta=0 (N), tb=90 (E) => forward-right turn
+    if heading_change in (90, 270):
+        # forward + lateral (right or left)
+        direction = "RIGHT" if heading_change == 90 else "LEFT"
+
+        # Forward step before beginning arc
+        r_front = ra + fdr_a
+        c_front = ca + fdc_a
+        cells.append((r_front, c_front))
+
+        # Sweep 3 cells laterally (covers robot radius during turn)
+        step_dir = (fdr_b, fdc_b) if direction == "RIGHT" else (fdr_b, fdc_b)
+        for k in range(1, 4):
+            r_sweep = r_front + k * fdr_b
+            c_sweep = c_front + k * fdc_b
+            if in_bounds(r_sweep, c_sweep):
+                cells.append((r_sweep, c_sweep))
+
+        return cells
+
+    # === 3) 90° BACKWARD arcs (right or left) ===
+    # Example: going backwards while rotating
+    if heading_change in (180 + 90, 180 + 270):  # 270 or 90 mod 360 resolves similarly
+        # we can reuse the pattern but mirror directions
+        direction = "RIGHT" if heading_change == 270 else "LEFT"
+        # back off one cell first
+        r_back = ra - fdr_a
+        c_back = ca - fdc_a
+        cells.append((r_back, c_back))
+        # then sweep 3 cells laterally behind
+        for k in range(1, 4):
+            r_sweep = r_back - k * fdr_b
+            c_sweep = c_back - k * fdc_b
+            if in_bounds(r_sweep, c_sweep):
+                cells.append((r_sweep, c_sweep))
+        return cells
 
 def transition_collision_free(a, b, grid_blocked):
     """Conservative collision check along the a->b transition."""
@@ -740,6 +788,28 @@ def movements_from_path(full_path, breaks, scans_rc, time_limit=TIME_LIMIT_S):
                 tokens.append("SB002")
         elif s['type'] == 'RECOGNIZE':
             tokens.append("IMAGE")
+    
+    cleaned = []
+    i = 0
+    while i < len(tokens):
+        # Check if we have a pattern "SB010", "SF010", "IMAGE"
+        if (i + 2 < len(tokens)
+            and tokens[i].startswith("SB")
+            and tokens[i + 1].startswith("SF")
+            and tokens[i + 2] == "IMAGE"):
+            try:
+                dist_back = int(tokens[i][2:])
+                dist_fwd = int(tokens[i + 1][2:])
+            except ValueError:
+                dist_back = dist_fwd = 0
+            # If both moves ≤ 10 cm (one cell), drop them
+            if dist_back == 10 and dist_fwd == 10:
+                # Skip the back and forward moves entirely
+                i += 2
+                continue
+        cleaned.append(tokens[i])
+        i += 1
+    tokens = cleaned
 
     path_coords = [[c, r] for (r, c, theta) in full_path]
 
@@ -1316,7 +1386,7 @@ def task1(json_payload=None):
     # --- END NEW ---
 
     # 5) Animate path
-    # animate_path(blocked, obstacles_rc, scans, order, full_path, breaks)
+    animate_path(blocked, obstacles_rc, scans, order, full_path, breaks)
 
 if __name__ == "__main__":
     # For manual testing you can still pass a JSON file path and we’ll load & run it.
