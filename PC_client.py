@@ -367,7 +367,7 @@ class PCClient:
                     if self.task_2:
                         image_path = f"captured_images/task2_obs_id_{obs_id}_{image_counter}.jpg"
                     else:
-                        image_path = f"captured_images/task1_obs_id_{obs_id}_{image_counter}.jpg"
+                        image_path = f"captured_images/task1_obs_id_{self.t1.obs_order[int(obs_id)]}_{image_counter}.jpg"
                     
                     print("Before opening image")
 
@@ -378,7 +378,7 @@ class PCClient:
 
                     image_prediction = model_inference.image_inference(
                         image_or_path=image_path,
-                        obs_id=str(obs_id), 
+                        obs_id=str(self.t1.obs_order[int(obs_id)]), 
                         image_counter=image_counter, 
                         image_id_map=[],
                         task_2=self.task_2
@@ -422,6 +422,10 @@ class PCClient:
                             destination_file = f"{destination_folder}/task1_result_obs_id_{self.t1.obs_order[int(obs_id)]}.jpg"
                         #hopefully this solves the stitching image to used the YOLO processed image
                         image_path = image_prediction["image_path"] 
+                        
+                        # if no detections
+                        if not os.path.exists(image_path):
+                            image_path = f"captured_images/task1_obs_id_{self.t1.obs_order[int(obs_id)]}_{image_counter-1}.jpg"
                         # image_path = image_path # use the last captured image
 
                         print("Image path: ",image_path)
