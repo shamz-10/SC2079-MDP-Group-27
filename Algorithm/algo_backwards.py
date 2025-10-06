@@ -406,8 +406,8 @@ def motion_primitives(state):
     start_theta_rad = math.radians(theta)
     
     # Forward left arc
-    fwd_left_x = (c + LF_OFFSET_STRAIGHT*dc + LF_OFFSET_ARC*dc_l) * CELL_CM
-    fwd_left_y = (r + LF_OFFSET_STRAIGHT*dr + LF_OFFSET_ARC*dr_l) * CELL_CM
+    fwd_left_x = (c + OFFSET_STRAIGHT*dc + OFFSET_ARC*dc_l) * CELL_CM
+    fwd_left_y = (r + OFFSET_STRAIGHT*dr + OFFSET_ARC*dr_l) * CELL_CM
     fwd_left_theta_rad = math.radians(theta_l)
     fwd_left_cost = dubins_path_cost(
         (start_x, start_y, start_theta_rad),
@@ -417,8 +417,8 @@ def motion_primitives(state):
     )
     
     # Forward right arc
-    fwd_right_x = (c + RF_OFFSET_STRAIGHT*dc + RF_OFFSET_ARC*dc_r) * CELL_CM
-    fwd_right_y = (r + RF_OFFSET_STRAIGHT*dr + RF_OFFSET_ARC*dr_r) * CELL_CM
+    fwd_right_x = (c + OFFSET_STRAIGHT*dc + OFFSET_ARC*dc_r) * CELL_CM
+    fwd_right_y = (r + OFFSET_STRAIGHT*dr + OFFSET_ARC*dr_r) * CELL_CM
     fwd_right_theta_rad = math.radians(theta_r)
     fwd_right_cost = dubins_path_cost(
         (start_x, start_y, start_theta_rad),
@@ -559,9 +559,7 @@ def _step_cost(a, b):
         fdr_b, fdc_b = DIRS[tb]
         
         # Forward arc: advance in original direction + lateral in new direction
-        if (rb - ra, cb - ca) == (LF_OFFSET_STRAIGHT*fdr_a + LF_OFFSET_ARC*fdr_b, LF_OFFSET_STRAIGHT*fdc_a + LF_OFFSET_ARC*fdc_b):
-            return ARC_COST
-        if (rb - ra, cb - ca) == (RF_OFFSET_STRAIGHT*fdr_a + RF_OFFSET_ARC*fdr_b, RF_OFFSET_STRAIGHT*fdc_a + RF_OFFSET_ARC*fdc_b):
+        if (rb - ra, cb - ca) == (OFFSET_STRAIGHT*fdr_a + OFFSET_ARC*fdr_b, OFFSET_STRAIGHT*fdc_a + OFFSET_ARC*fdc_b):
             return ARC_COST
         
         # Backward arc: reverse in original direction + lateral in new direction  
@@ -624,11 +622,9 @@ def _primitive_from_edge(a, b):
         fdr_a, fdc_a = DIRS[ta]
         fdr_b, fdc_b = DIRS[tb]
         
-        # Forward left arc
-        if tdir == 'LEFT' and (rb - ra, cb - ca) == (
-            LF_OFFSET_STRAIGHT*fdr_a + LF_OFFSET_ARC*fdr_b,
-            LF_OFFSET_STRAIGHT*fdc_a + LF_OFFSET_ARC*fdc_b):
-            return {'type':'ARC_FWD', 'direction':'LEFT',
+        # Forward arc
+        if (rb - ra, cb - ca) == (OFFSET_STRAIGHT*fdr_a + OFFSET_ARC*fdr_b, OFFSET_STRAIGHT*fdc_a + OFFSET_ARC*fdc_b):
+            return {'type':'ARC_FWD', 'direction': tdir,
                     'advance_cells': 1, 'delta_heading_deg': 90,
                     'dt': ARC_COST,
                     'from': (ra, ca, ta), 'to': (rb, cb, tb)}
@@ -639,15 +635,8 @@ def _primitive_from_edge(a, b):
 
             return {'type':'ARC_BWD', 'direction': tdir,
                     'advance_cells': -1, 'delta_heading_deg': 90,
-                    'dt': ARC_COST, 'from': a, 'to': b}
-
-        # Backward right arc
-        if tdir == 'RIGHT' and (rb - ra, cb - ca) == (
-            -RB_OFFSET_STRAIGHT*fdr_a - RB_OFFSET_ARC*fdr_b,
-            -RB_OFFSET_STRAIGHT*fdc_a - RB_OFFSET_ARC*fdc_b):
-            return {'type':'ARC_BWD', 'direction':'RIGHT',
-                    'advance_cells': -1, 'delta_heading_deg': 90,
-                    'dt': ARC_COST, 'from': a, 'to': b}
+                    'dt': ARC_COST,
+                    'from': (ra, ca, ta), 'to': (rb, cb, tb)}
 
     # Fallback
     return {'type':'FWD', 'cells':1, 'dt': FORWARD_COST,
@@ -1151,7 +1140,7 @@ def animate_path(grid_blocked, obstacles_rc, scans_rc, visit_order, full_path, b
     total_frames = last_frame + 1
     ani = animation.FuncAnimation(
         fig, update, frames=total_frames,
-        init_func=init, interval=200, blit=True, repeat=False
+        init_func=init, interval=120, blit=True, repeat=False
     )
 
     plt.show()
@@ -1386,16 +1375,6 @@ def task1(json_payload=None):
     print("\n=== MOVEMENT TOKENS ===")
     print(token_str)
     print(f"\nSaved JSON trace to: {outfile}")
-
-    # --- NEW: save visit order as a 1-D JSON array of obstacle IDs ---
-    # 'order' is assumed to be indices into the original obstacles list.
-    visit_order_ids = [ids[i] for i in order] if order else []
-    order_outfile = os.path.join(out_dir, "obstacle_visit_order.json")
-    with open(order_outfile, "w") as f:
-        json.dump(visit_order_ids, f)
-    print(f"Visit order (IDs): {visit_order_ids}")
-    print(f"Saved obstacle visit order to: {order_outfile}")
-    # --- END NEW ---
 
     # --- NEW: save visit order as a 1-D JSON array of obstacle IDs ---
     visit_order_ids = [ids[i] for i in order] if order else []
