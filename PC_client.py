@@ -32,6 +32,7 @@ class PCClient:
         self.image_record = []
         self.task_2 = TASK_2
         self.obs_order_count = 0
+        self.image_id_set = set()
 
         # NEW: provide a t1 object compatible with your old calls
         self.t1 = Task1Manager()
@@ -187,6 +188,16 @@ class PCClient:
                             self.msg_queue.put(json.dumps(command))
                             retries += 1
                             continue
+
+                        #################### Duplicate image id check ####################
+                        # TODO: Uncomment if want to prevent duplicate image ids, but risk messing up downstream if earlier images registered the wrong image id
+                        # Ensure no duplicate image ids are sent
+                        # img_id = image_prediction['data']['img_id']
+                        # if img_id is not None and img_id in self.image_id_set:
+                        #     print(f"Duplicate image id {img_id} detected, skipping...")
+                        #     continue
+                        # self.image_id_set.add(img_id)
+                        #################################################################
                                                 
                         # copy image to images_result folder and rename them according to obs_id
                         destination_folder = "images_result"
@@ -221,6 +232,7 @@ class PCClient:
                         self.msg_queue.put(message)
                         print("after msg queue put message")
                         image_counter = 0
+                        retries = 0
                         if self.task_2:
                             obs_id += 1       
 
