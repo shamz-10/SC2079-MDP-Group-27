@@ -13,6 +13,7 @@ from Algorithm.task1_manager import Task1Manager
 
 # Configuration
 TASK_2 = False  #TODO: Change to False for task 1, True for task 2
+NUM_OF_RETRIES = 1  # Number of retries for image inference if no detections
 
 # Constants
 RPI_IP = "192.168.27.27"  # Replace with the Raspberry Pi's IP address
@@ -128,13 +129,14 @@ class PCClient:
                     else:
                         print("[PC Client] No NAVIGATION segment available (maybe END).")
 
-                elif message["type"] == "FASTEST_PATH":
-                    command = {"type": "FASTEST_PATH"}
-                    self.msg_queue.put(json.dumps(command))
+                # TODO: Task 2 implementation
+                # elif message["type"] == "FASTEST_PATH":
+                #     command = {"type": "FASTEST_PATH"}
+                #     self.msg_queue.put(json.dumps(command))
                 
-                elif message["type"] == "test":
-                    message = {"type": "IMAGE_RESULTS", "data": {"obs_id": "3", "img_id": "39"}}
-                    self.msg_queue.put(json.dumps(message))
+                # elif message["type"] == "test":
+                #     message = {"type": "IMAGE_RESULTS", "data": {"obs_id": "3", "img_id": "39"}}
+                #     self.msg_queue.put(json.dumps(message))
 
                 elif message["type"] == "IMAGE_TAKEN":
                     # Add image inference implementation here:
@@ -148,12 +150,12 @@ class PCClient:
                     else:
                         image_path = f"captured_images/task1_obs_id_{self.t1.obs_order[int(obs_id)]}_{image_counter}.jpg"
                     
-                    print("Before opening image")
+                    # print("Before opening image")
 
                     with open(image_path, "wb") as img_file:
                         img_file.write(decoded_image)
 
-                    print("Before calling image recognition model")
+                    # print("Before calling image recognition model")
 
                     image_prediction = model_inference.image_inference(
                         image_or_path=image_path,
@@ -162,21 +164,30 @@ class PCClient:
                         image_id_map=[],
                         task_2=self.task_2
                     )
+                    # If not final image, store the prediction for potential back-tracing
+                    self.image_record.append(image_prediction)
                     image_counter += 1
                     print(image_prediction)
 
                     if message["final_image"] == True:
                         
-                        # Get last prediction and move forward
+                        # If no detections in final image, back trace to previous images
                         while image_prediction['data']['img_id'] == None and self.image_record is not None:
                             if self.image_record:
                                 image_prediction = self.image_record.pop()
                             else:
                                 break
-                        
-                        # TODO: Implement function to handle no prediction
-                        
 
+                        # TODO: Comment out if expecting no detections
+                        # If still no detections, move back to last obstacle and retry once
+                        if image_prediction['data']['img_id'] == None and NUM_OF_RETRIES > retries:
+
+                            last_path = command['data']['path'][-1]
+                            command = {"type": "NAVIGATION", "data": {"commands": ['SB010','IMAGE','SF010'], "path": [last_path, last_path]}}
+                            self.msg_queue.put(json.dumps(command))
+                            retries += 1
+                            continue
+                                                
                         # copy image to images_result folder and rename them according to obs_id
                         destination_folder = "images_result"
                         os.makedirs(destination_folder, exist_ok=True)
