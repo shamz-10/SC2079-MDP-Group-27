@@ -4,3 +4,4 @@
 *.jpg
 /venv
 /image_result/
+__pycache__/
