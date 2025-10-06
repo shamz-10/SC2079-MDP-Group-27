@@ -151,20 +151,19 @@ def dubins_path_cost(start_pose, end_pose, turning_radius, speed):
 # =========================
 # Grid / Robot parameters
 # =========================
-NCELLS = 40                 # 20x20 grid
-CELL_CM = 5.0              # each cell = 10cm
+NCELLS = 20                 # 20x20 grid
+CELL_CM = 10.0              # each cell = 10cm
 WORLD_CM = NCELLS * CELL_CM
 
-ROBOT_FOOTPRINT = 6         # robot is 3x3 cells
+ROBOT_FOOTPRINT = 3         # robot is 3x3 cells
 INFLATE_RADIUS = (ROBOT_FOOTPRINT - 1)//2  # = 1
-#INFLATE_RADIUS = 0
 
-OB_SIZE_CELLS = 2           # obstacle occupies 1x1 cell
-SCAN_OFFSET_CELLS = 6       # 2 cells = 20cm away from obstacle side
+OB_SIZE_CELLS = 1           # obstacle occupies 1x1 cell
+SCAN_OFFSET_CELLS = 3       # 2 cells = 20cm away from obstacle side
 
 # Start state (row, col, heading°); (0,0) is BOTTOM-LEFT; rows grow upward now.
 # Headings are multiples of 90: 0=N, 90=E, 180=S, 270=W
-START_RC = (0, 0, 0)
+START_RC = (1, 1, 0)
 
 # Direction the ROBOT must face to scan a given obstacle side.
 # (row, col) deltas expressed as the **final step into the scan cell**.
@@ -175,12 +174,21 @@ DIR_FOR_SIDE = {
     'W': ( 0, +1),  # face East
 }
 
+OFFSET_STRAIGHT = 1
+OFFSET_ARC = 3
 
 # =========================
 # Grid helpers
 # =========================
+# def in_bounds(r, c):
+#     return 0 <= r < NCELLS and 0 <= c < NCELLS
+
 def in_bounds(r, c):
-    return 0 <= r < NCELLS and 0 <= c < NCELLS
+    # For a 3x3 robot, check that the full footprint is inside the grid
+    return (
+        0 <= r - INFLATE_RADIUS and r + INFLATE_RADIUS < NCELLS and
+        0 <= c - INFLATE_RADIUS and c + INFLATE_RADIUS < NCELLS
+    )
 
 def grid_with_obstacles(obstacles_rc):
     """Return a boolean grid (True=blocked) with raw obstacles."""
@@ -259,32 +267,18 @@ DIRS = {
 }
 
 # --- Motion / Time model ---
-TURNING_RADIUS = 5   # cells (25 cm @ 10 cm/cell)
+TURNING_RADIUS = 2.0   # cells (25 cm @ 10 cm/cell)
 SPEED_CM_S = 20.0      # robot linear speed in cm/s
 
 # Primitive **times** (seconds)
 FORWARD_COST = CELL_CM / SPEED_CM_S
 BACKWARD_COST = FORWARD_COST * 1.10
-ARC_COST = (math.pi * TURNING_RADIUS * CELL_CM / 2.0) / 50.0
+ARC_COST = (math.pi * TURNING_RADIUS * CELL_CM / 2.0) / SPEED_CM_S
 
 RECOGNITION_TIME_S = 2.0
 TIME_LIMIT_S = 120.0
 
 SAMPLE_TRANSITIONS = True
-
-RF_OFFSET_STRAIGHT = 7
-RF_OFFSET_ARC = 6
-
-LF_OFFSET_STRAIGHT = 4
-LF_OFFSET_ARC = 3
-
-#Logic is swap, this is for LEFT BACK TURNS
-RB_OFFSET_STRAIGHT = 1
-RB_OFFSET_ARC = 3
-
-#Logic is swap, this is for RIGHT BACK TURNS
-LB_OFFSET_STRAIGHT = 6
-LB_OFFSET_ARC = 8
 
 def dir_to_theta(dr, dc):
     for theta, (rr, cc) in DIRS.items():
@@ -292,71 +286,87 @@ def dir_to_theta(dr, dc):
             return theta
     raise ValueError(f"No heading matches direction {(dr, dc)}")
 
-def footprint_cells(r, c, theta, size=ROBOT_FOOTPRINT):
-    """
-    Return list of (row, col) cells occupied by the robot
-    given its bottom-left anchor in robot's orientation.
-    """
-    coords = []
-    if theta == 0:  # Facing North (up)
-        # bottom-left = south-west corner
-        for dr in range(size):
-            for dc in range(size):
-                coords.append((r+dr, c+dc))
-    elif theta == 90:  # Facing East (right)
-        # bottom-left = north-west corner
-        for dr in range(size):
-            for dc in range(size):
-                coords.append((r-dr, c+dc))
-    elif theta == 180:  # Facing South (down)
-        # bottom-left = north-east corner
-        for dr in range(size):
-            for dc in range(size):
-                coords.append((r-dr, c-dc))
-    elif theta == 270:  # Facing West (left)
-        # bottom-left = south-east corner
-        for dr in range(size):
-            for dc in range(size):
-                coords.append((r+dr, c-dc))
-    return coords
+def collision_free_cell(r, c, grid_blocked):
+    return in_bounds(r, c) and (not grid_blocked[r, c])
 
-def collision_free_cell(r, c, grid_blocked, theta=0):
-    """Check that all cells covered by robot footprint (orientation-aware) are free."""
-    for rr, cc in footprint_cells(r, c, theta):
-        if not in_bounds(rr, cc) or grid_blocked[rr, cc]:
-            return False
-    return True
 
 def cells_between(a, b):
     """
-    Conservative sampler of cells from a->b (ignores θ).
+    Conservative sampler of grid cells between states a -> b.
+    Now explicitly handles forward/backward straights and 90° arc turns
+    using known geometric sweep patterns instead of generic interpolation.
     """
-    (ra, ca, _), (rb, cb, _) = a, b
-    r, c = ra, ca
-    dr = 1 if rb > ra else (-1 if rb < ra else 0)
-    dc = 1 if cb > ca else (-1 if cb < ca else 0)
+    (ra, ca, ta) = a
+    (rb, cb, tb) = b
     cells = []
-    while (r, c) != (rb, cb):
-        if abs(rb - r) >= abs(cb - c):
-            r += dr
-        else:
-            c += dc
-        cells.append((r, c))
-        if len(cells) > 4:
-            break
-    return cells
+
+    heading_change = (tb - ta) % 360
+    fdr_a, fdc_a = DIRS[ta]  # forward direction from start
+    fdr_b, fdc_b = DIRS[tb]  # forward direction after turn
+
+    #Straight motion
+    if heading_change == 0:
+        dr = 1 if rb > ra else (-1 if rb < ra else 0)
+        dc = 1 if cb > ca else (-1 if cb < ca else 0)
+        r, c = ra, ca
+        while (r, c) != (rb, cb):
+            if abs(rb - r) >= abs(cb - c):
+                r += dr
+            else:
+                c += dc
+            cells.append((r, c))
+            if len(cells) >= 4:
+                break
+        return cells
+
+    # === 2) 90° FORWARD arcs (right or left) ===
+    # Example: ta=0 (N), tb=90 (E) => forward-right turn
+    if heading_change in (90, 270):
+        # forward + lateral (right or left)
+        direction = "RIGHT" if heading_change == 90 else "LEFT"
+
+        # Forward step before beginning arc
+        r_front = ra + fdr_a
+        c_front = ca + fdc_a
+        cells.append((r_front, c_front))
+
+        # Sweep 3 cells laterally (covers robot radius during turn)
+        step_dir = (fdr_b, fdc_b) if direction == "RIGHT" else (fdr_b, fdc_b)
+        for k in range(1, 4):
+            r_sweep = r_front + k * fdr_b
+            c_sweep = c_front + k * fdc_b
+            if in_bounds(r_sweep, c_sweep):
+                cells.append((r_sweep, c_sweep))
+
+        return cells
+
+    # === 3) 90° BACKWARD arcs (right or left) ===
+    # Example: going backwards while rotating
+    if heading_change in (180 + 90, 180 + 270):  # 270 or 90 mod 360 resolves similarly
+        # we can reuse the pattern but mirror directions
+        direction = "RIGHT" if heading_change == 270 else "LEFT"
+        # back off one cell first
+        r_back = ra - fdr_a
+        c_back = ca - fdc_a
+        cells.append((r_back, c_back))
+        # then sweep 3 cells laterally behind
+        for k in range(1, 4):
+            r_sweep = r_back - k * fdr_b
+            c_sweep = c_back - k * fdc_b
+            if in_bounds(r_sweep, c_sweep):
+                cells.append((r_sweep, c_sweep))
+        return cells
 
 def transition_collision_free(a, b, grid_blocked):
     """Conservative collision check along the a->b transition."""
-    if not collision_free_cell(b[0], b[1], grid_blocked, b[2]):
+    if not collision_free_cell(b[0], b[1], grid_blocked):
         return False
     if not SAMPLE_TRANSITIONS:
         return True
     for (r, c) in cells_between(a, b):
-        if not collision_free_cell(r, c, grid_blocked, a[2]):
+        if not collision_free_cell(r, c, grid_blocked):
             return False
     return True
-
 
 def motion_primitives(state):
     """
@@ -380,12 +390,15 @@ def motion_primitives(state):
     dr_r, dc_r = DIRS[theta_r]
 
     # Forward arc endpoints: one forward + one lateral cell
-    fwd_left_end  = (r + LF_OFFSET_STRAIGHT*dr + LF_OFFSET_ARC*dr_l, c + LF_OFFSET_STRAIGHT*dc + LF_OFFSET_ARC*dc_l, theta_l)
-    fwd_right_end = (r + RF_OFFSET_STRAIGHT*dr + RF_OFFSET_ARC*dr_r, c + RF_OFFSET_STRAIGHT*dc + RF_OFFSET_ARC*dc_r, theta_r)
+    fwd_left_end  = (r + OFFSET_STRAIGHT*dr + OFFSET_ARC*dr_l, c + OFFSET_STRAIGHT*dc + OFFSET_ARC*dc_l, theta_l)
+    fwd_right_end = (r + OFFSET_STRAIGHT*dr + OFFSET_ARC*dr_r, c + OFFSET_STRAIGHT*dc + OFFSET_ARC*dc_r, theta_r)
+
 
     # BACKWARD ARCS: left/right 90° arc (reverse 1 cell and yaw ±90°)
-    bwd_left_end  = (r - LB_OFFSET_STRAIGHT*dr - LB_OFFSET_ARC*dr_l, c - LB_OFFSET_STRAIGHT*dc - LB_OFFSET_ARC*dc_l, theta_l)
-    bwd_right_end = (r - RB_OFFSET_STRAIGHT*dr - RB_OFFSET_ARC*dr_r, c - RB_OFFSET_STRAIGHT*dc - RB_OFFSET_ARC*dc_r, theta_r)
+    # bwd_left_end  = (r - OFFSET_STRAIGHT*dr - OFFSET_ARC*dr_l, c - OFFSET_STRAIGHT*dc - OFFSET_ARC*dc_l, theta_l)
+    # bwd_right_end = (r - OFFSET_STRAIGHT*dr - OFFSET_ARC*dr_r, c - OFFSET_STRAIGHT*dc - OFFSET_ARC*dc_r, theta_r)
+    bwd_left_end  = (r - OFFSET_ARC*dr - OFFSET_STRAIGHT*dr_l, c - OFFSET_ARC*dc - OFFSET_STRAIGHT*dc_l, theta_l)
+    bwd_right_end = (r - OFFSET_ARC*dr - OFFSET_STRAIGHT*dr_r, c - OFFSET_ARC*dc - OFFSET_STRAIGHT*dc_r, theta_r)
 
     # Calculate Dubins costs for all arcs
     start_x = c * CELL_CM
@@ -415,8 +428,10 @@ def motion_primitives(state):
     )
     
     # Backward left arc
-    bwd_left_x = (c - LB_OFFSET_STRAIGHT*dc - LB_OFFSET_ARC*dc_l) * CELL_CM
-    bwd_left_y = (r - LB_OFFSET_STRAIGHT*dr - LB_OFFSET_ARC*dr_l) * CELL_CM
+    # bwd_left_x = (c - OFFSET_STRAIGHT*dc - OFFSET_ARC*dc_l) * CELL_CM
+    # bwd_left_y = (r - OFFSET_STRAIGHT*dr - OFFSET_ARC*dr_l) * CELL_CM
+    bwd_left_x = (c - OFFSET_ARC*dc - OFFSET_STRAIGHT*dc_l) * CELL_CM
+    bwd_left_y = (r - OFFSET_ARC*dr - OFFSET_STRAIGHT*dr_l) * CELL_CM
     bwd_left_theta_rad = math.radians(theta_l)
     bwd_left_cost = dubins_path_cost(
         (start_x, start_y, start_theta_rad),
@@ -426,8 +441,10 @@ def motion_primitives(state):
     )
     
     # Backward right arc
-    bwd_right_x = (c - RB_OFFSET_STRAIGHT*dc - RB_OFFSET_ARC*dc_r) * CELL_CM
-    bwd_right_y = (r - RB_OFFSET_STRAIGHT*dr - RB_OFFSET_ARC*dr_r) * CELL_CM
+    # bwd_right_x = (c - OFFSET_STRAIGHT*dc - OFFSET_ARC*dc_r) * CELL_CM
+    # bwd_right_y = (r - OFFSET_STRAIGHT*dr - OFFSET_ARC*dr_r) * CELL_CM
+    bwd_right_x = (c - OFFSET_ARC*dc - OFFSET_STRAIGHT*dc_r) * CELL_CM
+    bwd_right_y = (r - OFFSET_ARC*dr - OFFSET_STRAIGHT*dr_r) * CELL_CM
     bwd_right_theta_rad = math.radians(theta_r)
     bwd_right_cost = dubins_path_cost(
         (start_x, start_y, start_theta_rad),
@@ -548,9 +565,9 @@ def _step_cost(a, b):
             return ARC_COST
         
         # Backward arc: reverse in original direction + lateral in new direction  
-        if (rb - ra, cb - ca) == (-LB_OFFSET_ARC*fdr_a - LB_OFFSET_STRAIGHT*fdr_b, -LB_OFFSET_ARC*fdc_a - LB_OFFSET_STRAIGHT*fdc_b):
-            return ARC_COST
-        if (rb - ra, cb - ca) == (-RB_OFFSET_ARC*fdr_a - RB_OFFSET_STRAIGHT*fdr_b, -RB_OFFSET_ARC*fdc_a - RB_OFFSET_STRAIGHT*fdc_b):
+        # if (rb - ra, cb - ca) == (-OFFSET_STRAIGHT*fdr_a - OFFSET_ARC*fdr_b, -OFFSET_STRAIGHT*fdc_a - OFFSET_ARC*fdc_b):
+        if (rb - ra, cb - ca) == (-OFFSET_ARC*fdr_a - OFFSET_STRAIGHT*fdr_b, -OFFSET_ARC*fdc_a - OFFSET_STRAIGHT*fdc_b):
+
             return ARC_COST
     
     # Fallback to forward cost
@@ -613,21 +630,14 @@ def _primitive_from_edge(a, b):
             LF_OFFSET_STRAIGHT*fdc_a + LF_OFFSET_ARC*fdc_b):
             return {'type':'ARC_FWD', 'direction':'LEFT',
                     'advance_cells': 1, 'delta_heading_deg': 90,
-                    'dt': ARC_COST, 'from': a, 'to': b}
+                    'dt': ARC_COST,
+                    'from': (ra, ca, ta), 'to': (rb, cb, tb)}
+        
+        # Backward arc
+        # if (rb - ra, cb - ca) == (-OFFSET_STRAIGHT*fdr_a - OFFSET_ARC*fdr_b, -OFFSET_STRAIGHT*fdc_a - OFFSET_ARC*fdc_b):
+        if (rb - ra, cb - ca) == (-OFFSET_ARC*fdr_a - OFFSET_STRAIGHT*fdr_b, -OFFSET_ARC*fdc_a - OFFSET_STRAIGHT*fdc_b):
 
-        # Forward right arc
-        if tdir == 'RIGHT' and (rb - ra, cb - ca) == (
-            RF_OFFSET_STRAIGHT*fdr_a + RF_OFFSET_ARC*fdr_b,
-            RF_OFFSET_STRAIGHT*fdc_a + RF_OFFSET_ARC*fdc_b):
-            return {'type':'ARC_FWD', 'direction':'RIGHT',
-                    'advance_cells': 1, 'delta_heading_deg': 90,
-                    'dt': ARC_COST, 'from': a, 'to': b}
-
-        # Backward left arc
-        if tdir == 'LEFT' and (rb - ra, cb - ca) == (
-            -LB_OFFSET_STRAIGHT*fdr_a - LB_OFFSET_ARC*fdr_b,
-            -LB_OFFSET_STRAIGHT*fdc_a - LB_OFFSET_ARC*fdc_b):
-            return {'type':'ARC_BWD', 'direction':'LEFT',
+            return {'type':'ARC_BWD', 'direction': tdir,
                     'advance_cells': -1, 'delta_heading_deg': 90,
                     'dt': ARC_COST, 'from': a, 'to': b}
 
@@ -721,9 +731,27 @@ def movements_from_path(full_path, breaks, scans_rc, time_limit=TIME_LIMIT_S):
             dist = int(round(s['cells'] * CELL_CM))
             new_s['move_code'] = f"SB{dist:03d}"
         elif s['type'] == 'ARC_FWD':
-            new_s['move_code'] = "LF087" if s['direction'] == 'LEFT' else "RF087"
+            if s['direction']=='LEFT':
+                # steps_out.append(dict(new_s, move_code="SB003"))
+                steps_out.append(dict(new_s, move_code="LF090"))
+            else:   
+                steps_out.append(dict(new_s, move_code="RF083"))
+            continue
+
         elif s['type'] == 'ARC_BWD':
-            new_s['move_code'] = "RB087" if s['direction'] == 'LEFT' else "LB087"
+            if s['direction']=='LEFT':
+                # steps_out.append(dict(new_s, move_code="SB007"))
+                # new_s['move_code'] = "RB090"
+                steps_out.append(dict(new_s, move_code="RB091"))
+                # steps_out.append(dict(new_s, move_code="SB003"))
+
+            else:   
+                # steps_out.append(dict(new_s, move_code="SB003"))
+
+                steps_out.append(dict(new_s, move_code="LB090"))
+                # steps_out.append(dict(new_s, move_code="SF005"))
+            continue
+
         steps_out.append(new_s)
 
         if abs(t - time_limit) <= 1e-9:
@@ -731,63 +759,70 @@ def movements_from_path(full_path, breaks, scans_rc, time_limit=TIME_LIMIT_S):
 
     tokens = []
     for s in steps_out:
+        # if s['type'] == 'FWD':
+        #     dist = int(round(s['cells'] * CELL_CM))
+        #     tokens.append(f"SF{dist:03d}")
+        # elif s['type'] == 'BWD':
+        #     dist = int(round(s['cells'] * CELL_CM))
+        #     tokens.append(f"SB{dist:03d}")
         if s['type'] == 'FWD':
             dist = int(round(s['cells'] * CELL_CM))
-            if(dist > 100):
-                dist1 = 100
-                dist2 = dist - 100
-                tokens.append(f"SF{dist1:03d}")
-                tokens.append(f"SF{dist2:03d}")
-            else:
+            while dist > 100:
+                tokens.append("SF100")
+                dist -= 100
+            if dist > 0:
                 tokens.append(f"SF{dist:03d}")
         elif s['type'] == 'BWD':
             dist = int(round(s['cells'] * CELL_CM))
-            if(dist > 100):
-                dist1 = 100
-                dist2 = dist - 100
-                tokens.append(f"SB{dist1:03d}")
-                tokens.append(f"SB{dist2:03d}")
-            else:
+            while dist > 100:
+                tokens.append("SB100")
+                dist -= 100
+            if dist > 0:
                 tokens.append(f"SB{dist:03d}")
         elif s['type'] == 'ARC_FWD':
-            tokens.append("LF087" if s['direction'] == 'LEFT' else "RF087")
+            if s['direction']=='LEFT':
+                tokens.append("SB003")
+                tokens.append("LF087")
+                tokens.append("SF002")
+            else:
+                tokens.append("SB005")
+                tokens.append("RF090")
+                tokens.append("SB002")
         elif s['type'] == 'ARC_BWD':
-            tokens.append("RB087" if s['direction'] == 'LEFT' else "LB087")
+            if s['direction']=='LEFT':
+                tokens.append("SB003")
+                tokens.append("RB083")
+                tokens.append("SF007")
+            else:
+                tokens.append("SB007")
+                tokens.append("LB089")
+                tokens.append("SB002")
         elif s['type'] == 'RECOGNIZE':
             tokens.append("IMAGE")
+    
+    cleaned = []
+    i = 0
+    while i < len(tokens):
+        # Check if we have a pattern "SB010", "SF010", "IMAGE"
+        if (i + 2 < len(tokens)
+            and tokens[i].startswith("SB")
+            and tokens[i + 1].startswith("SF")
+            and tokens[i + 2] == "IMAGE"):
+            try:
+                dist_back = int(tokens[i][2:])
+                dist_fwd = int(tokens[i + 1][2:])
+            except ValueError:
+                dist_back = dist_fwd = 0
+            # If both moves ≤ 10 cm (one cell), drop them
+            if dist_back == 10 and dist_fwd == 10:
+                # Skip the back and forward moves entirely
+                i += 2
+                continue
+        cleaned.append(tokens[i])
+        i += 1
+    tokens = cleaned
 
-    # path_coords = [[c+1, r+1] for (r, c, theta) in full_path]
-    center_coords = []
-    for (r, c, theta) in full_path:
-        # Compute center from anchor (r, c) and orientation
-        half = ROBOT_FOOTPRINT // 2
-        if ROBOT_FOOTPRINT % 2 == 0:
-            # Even footprint (e.g., 6x6)
-            if theta == 0:    # North
-                center_r = r + 2
-                center_c = c + 2
-            elif theta == 90: # East
-                center_r = r - 2
-                center_c = c + 2
-            elif theta == 180: # South
-                center_r = r - 2
-                center_c = c - 2
-            elif theta == 270: # West
-                center_r = r + 2
-                center_c = c - 2
-            else:
-                center_r, center_c = r, c
-        else:
-            # Odd footprint (e.g., 3x3)
-            center_r = r + half
-            center_c = c + half
-        center_coords.append([center_c, center_r])
-    path_coords = center_coords
-    print(full_path)
-    print(path_coords)
-
-    # Floor divide each coordinate in path_coords by 2
-    path_coords = [[coord // 2 for coord in pt] for pt in path_coords]
+    path_coords = [[c, r] for (r, c, theta) in full_path]
 
     trace = {
         "type": "NAVIGATION",
@@ -806,56 +841,15 @@ def save_movement_trace(trace, path="movement_trace.json"):
 # =========================
 # Multi-target routing (Hamiltonian shortest-time via Held–Karp)
 # =========================
-
-def anchor_from_center(center_rc, theta, size=ROBOT_FOOTPRINT):
-    """
-    Given the desired robot center (row, col) and orientation theta,
-    return the anchor (bottom-left depending on orientation).
-    Works correctly for both odd and even footprint sizes.
-    """
-    r, c = center_rc
-    half = size // 2  # integer part
-
-    if size % 2 == 1:
-        # Odd footprint (e.g., 3x3, 5x5): true center is a cell
-        if theta == 0:    # facing North, anchor = SW
-            return (r - half, c - half)
-        elif theta == 90: # facing East, anchor = NW
-            return (r + half, c - half)
-        elif theta == 180: # facing South, anchor = NE
-            return (r + half, c + half)
-        elif theta == 270: # facing West, anchor = SE
-            return (r - half, c + half)
-
-    else:
-        # Even footprint (e.g., 6x6): center lies between 4 cells
-        # We’ll enforce center alignment by biasing anchor back by (half-1)
-        if theta == 0:    # North
-            return (r - (half-1), c - (half-1))
-        elif theta == 90: # East
-            return (r + half, c - (half-1))
-        elif theta == 180: # South
-            return (r + half, c + half)
-        elif theta == 270: # West
-            return (r - (half-1), c + half)
-    
-    raise ValueError("theta must be 0,90,180,270")
-
 def _scan_goal_for_item(item):
     """From {"rc":(r,c), "side": 'N'|'S'|'E'|'W'} compute (goal_rc, goal_theta, approach_rc)."""
     (r, c) = item["rc"]
     side = item["side"].upper()
     cand_list = scan_candidates_for_obstacle_cell(r, c, side, offset=SCAN_OFFSET_CELLS, lateral_span=0)
-    goal_center = cand_list[0]   # the desired center in front of obstacle
+    goal_rc = cand_list[0]  # guaranteed non-empty by helper
     dr_req, dc_req = DIR_FOR_SIDE[side]
     goal_theta = dir_to_theta(dr_req, dc_req)
-
-    # Convert desired robot center into correct anchor, given orientation
-    goal_rc = anchor_from_center(goal_center, goal_theta)
-
-    # Approach from one step before anchor, in direction opposite robot facing
     approach_rc = (goal_rc[0] - dr_req, goal_rc[1] - dc_req)
-
     return goal_rc, goal_theta, approach_rc
 
 def plan_route_tsp(grid_blocked, start_state, obstacles_with_sides):
@@ -999,37 +993,37 @@ def cell_center_xy(rc):
 
 def draw_cell_square(ax, rc, color='tab:red', lw=2, alpha=1.0):
     r, c = rc
-    size = OB_SIZE_CELLS
-    x0, y0 = c, r  # bottom-left corner in grid coords
-    xs = [x0, x0+size, x0+size, x0, x0]
-    ys = [y0, y0, y0+size, y0+size, y0]
+    x0, y0 = c, r  # bottom-left of the cell
+    xs = [x0, x0+1, x0+1, x0, x0]
+    ys = [y0, y0, y0+1, y0+1, y0]
     ax.plot(xs, ys, color=color, lw=lw, alpha=alpha)
 
-def draw_robot_footprint(ax, state, color='k', lw=2):
-    """Draw robot footprint at (r,c,theta)."""
-    r, c, theta = state
-    cells = footprint_cells(r, c, theta)
-    if not cells:
-        return
-    # Extract polygon outline (instead of each square)
-    rows = [rr for rr, cc in cells]
-    cols = [cc for rr, cc in cells]
-    minr, maxr = min(rows), max(rows)+1
-    minc, maxc = min(cols), max(cols)+1
-    xs = [minc, maxc, maxc, minc, minc]
-    ys = [minr, minr, maxr, maxr, minr]
+def draw_robot_footprint(ax, rc, color='k', lw=2):
+    """Draw 3x3 robot footprint centered at rc."""
+    r, c = rc
+    r0, c0 = r - INFLATE_RADIUS, c - INFLATE_RADIUS
+    x0, y0 = c0, r0
+    xs = [x0, x0+ROBOT_FOOTPRINT, x0+ROBOT_FOOTPRINT, x0, x0]
+    ys = [y0, y0, y0+ROBOT_FOOTPRINT, y0+ROBOT_FOOTPRINT, y0]
     ax.plot(xs, ys, color=color, lw=lw)
 
 def draw_start_zone(ax):
+    """
+    Draw a shaded 3x3 START ZONE centered on START_RC (row,col).
+    """
     sr, sc, _ = START_RC
-    ax.add_patch(
-        plt.Rectangle((sc, sr), ROBOT_FOOTPRINT, ROBOT_FOOTPRINT,
-                      facecolor='tab:blue', alpha=0.12,
-                      edgecolor='tab:blue', lw=1.5)
-    )
-    xlab, ylab = sc + ROBOT_FOOTPRINT/2, sr + ROBOT_FOOTPRINT/2
-    ax.text(xlab, ylab, "START ZONE", color='tab:blue',
-            fontsize=9, ha='center', va='center')
+    r0 = max(0, sr - INFLATE_RADIUS)
+    c0 = max(0, sc - INFLATE_RADIUS)
+    r1 = min(NCELLS-1, sr + INFLATE_RADIUS)
+    c1 = min(NCELLS-1, sc + INFLATE_RADIUS)
+
+    x0, y0 = c0, r0
+    w = (c1 - c0 + 1)
+    h = (r1 - r0 + 1)
+
+    ax.add_patch(plt.Rectangle((x0, y0), w, h, facecolor='tab:blue', alpha=0.12, edgecolor='tab:blue', lw=1.5))
+    xlab, ylab = cell_center_xy((sr, sc))
+    ax.text(xlab, ylab, "START ZONE", color='tab:blue', fontsize=9, ha='center', va='center')
 
 # =========================
 # Animation (compatible with bottom-left origin)
@@ -1131,12 +1125,7 @@ def animate_path(grid_blocked, obstacles_rc, scans_rc, visit_order, full_path, b
     def update(frame):
         nonlocal camera_arrow
         path_line.set_data(path_xy[:frame+1,0], path_xy[:frame+1,1])
-        r, c, theta = full_path[frame]
-        cells = footprint_cells(r, c, theta)
-        rows = [rr for rr, cc in cells]
-        cols = [cc for rr, cc in cells]
-        xs = [min(cols), max(cols)+1, max(cols)+1, min(cols), min(cols)]
-        ys = [min(rows), min(rows), max(rows)+1, max(rows)+1, min(rows)]
+        xs, ys = robot_poly(full_path[frame][:2])
         robot_outline.set_data(xs, ys)
 
         camera_arrow.remove()
@@ -1289,23 +1278,22 @@ class InteractivePlacer:
 def nearest_free_center(blocked, start_rc):
     """
     If start_rc is blocked, BFS to find the nearest free cell (by 4-connected distance).
-    Returns a (r,c,θ) where the footprint is clear.
+    Returns a (r,c) where the 3×3 robot footprint is clear in the inflated grid.
     """
-    r0, c0, theta0 = start_rc
-    if collision_free_cell(r0, c0, blocked, theta0):
+    if not blocked[start_rc]:
         return start_rc
-    q = deque([(r0, c0)])
-    seen = {(r0, c0)}
+    q = deque([start_rc])
+    seen = {start_rc}
     directions = [(-1,0),(1,0),(0,-1),(0,1)]
     while q:
         r, c = q.popleft()
         for dr, dc in directions:
             nr, nc = r + dr, c + dc
-            if (nr, nc) in seen or not in_bounds(nr, nc):
+            if not in_bounds(nr, nc) or (nr, nc) in seen:
                 continue
             seen.add((nr, nc))
-            if collision_free_cell(nr, nc, blocked, theta0):
-                return (nr, nc, theta0)
+            if not blocked[nr, nc]:
+                return (nr, nc)
             q.append((nr, nc))
     return start_rc
 
@@ -1315,13 +1303,12 @@ def nearest_free_center(blocked, start_rc):
 def _items_from_payload(payload_dict):
     """
     Extract obstacles [{"rc":(r,c), "side":...}, ...] from a START_TASK-like dict.
-    Convert from 10cm grid to 5cm grid
     """
     items = []
     obstacles = payload_dict.get("data", {}).get("obstacles", [])
     for o in obstacles:
-        r = int(o.get("y")) * 2  # 10cm -> 5cm
-        c = int(o.get("x")) * 2
+        r = int(o.get("y"))  # y = row
+        c = int(o.get("x"))  # x = col
         side = str(o.get("dir", "N")).upper()
         items.append({"rc": (r, c), "side": side})
     return items
@@ -1336,9 +1323,8 @@ def _start_override_from_payload(payload_dict):
         return None
     dir_map = {"N": 0, "E": 90, "S": 180, "W": 270}
     try:
-        # rx = int(robot.get("x")) * 2
-        # ry = int(robot.get("y")) * 2
-        rx, ry = 0, 0
+        rx = int(robot.get("x"))
+        ry = int(robot.get("y"))
         rdir = str(robot.get("dir", "N")).upper()
         return (ry, rx, dir_map.get(rdir, START_RC[2]))
     except Exception:
@@ -1370,14 +1356,12 @@ def task1(json_payload=None):
     # 2) Build blocked grid
     obstacles_rc = [it["rc"] for it in items]
     sides = [it["side"] for it in items]
-    # carry IDs (fallback to 1..N if missing in payload)
     ids = [it.get("id", idx + 1) for idx, it in enumerate(items)]
 
     raw_grid = grid_with_obstacles(obstacles_rc)
     blocked = inflate_blocked(raw_grid, radius=INFLATE_RADIUS)
 
     global START_RC
-    # 3) Start state (override allowed) with auto-relocate if blocked
     r, c, theta = START_RC
     if start_override is not None:
         r, c, theta = start_override
@@ -1390,13 +1374,12 @@ def task1(json_payload=None):
 
     start_state = (r, c, theta)
 
-    # include 'id' so the planner can preserve mapping
     obstacles_with_sides = [{"rc": rc, "side": s, "id": oid}
                             for rc, s, oid in zip(obstacles_rc, sides, ids)]
 
     full_path, breaks, scans, order = plan_route_tsp(blocked, start_state, obstacles_with_sides)
 
-    # 4) Build + save movement JSON (save into Algorithm folder)
+    # 4) Build + save movement JSON
     trace, token_str = movements_from_path(full_path, breaks, scans, time_limit=TIME_LIMIT_S)
     out_dir = os.path.dirname(os.path.abspath(__file__))
     outfile = save_movement_trace(trace, os.path.join(out_dir, "movement_trace.json"))
@@ -1414,8 +1397,17 @@ def task1(json_payload=None):
     print(f"Saved obstacle visit order to: {order_outfile}")
     # --- END NEW ---
 
-    # 5) Animate if you want a UI (commented for headless use)
-    # animate_path(blocked, obstacles_rc, scans, order, full_path, breaks)
+    # --- NEW: save visit order as a 1-D JSON array of obstacle IDs ---
+    visit_order_ids = [ids[i] for i in order] if order else []
+    order_outfile = os.path.join(out_dir, "obstacle_visit_order.json")
+    with open(order_outfile, "w") as f:
+        json.dump(visit_order_ids, f)
+    print(f"Visit order (IDs): {visit_order_ids}")
+    print(f"Saved obstacle visit order to: {order_outfile}")
+    # --- END NEW ---
+
+    # 5) Animate path
+    animate_path(blocked, obstacles_rc, scans, order, full_path, breaks)
 
 if __name__ == "__main__":
     # For manual testing you can still pass a JSON file path and we’ll load & run it.
