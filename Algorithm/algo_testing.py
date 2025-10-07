@@ -888,7 +888,7 @@ def _scan_goal_for_item(item, grid_blocked):
         goal_rc = fallback
         approach_rc = (goal_rc[0] - dr_req, goal_rc[1] - dc_req)
         chosen_offset = preferred_offsets[-1]
-        
+
     return goal_rc, goal_theta, approach_rc
 
 def plan_route_tsp(grid_blocked, blocked_clearance, start_state, obstacles_with_sides):
@@ -1458,6 +1458,31 @@ def task1(json_payload=None):
     print("\n=== MOVEMENT TOKENS ===")
     print(token_str)
     print(f"\nSaved JSON trace to: {outfile}")
+
+    
+
+    # To remove SB010 SF010 IMAGE
+    cleaned_path = []
+    i = 0
+    if isinstance(token_str, list) and full_path:
+        cleaned_path = [full_path[0]]
+        fp_index = 1
+
+        while fp_index < len(full_path) and i < len(token_str):
+            tok = token_str[i]
+            if (i + 2 < len(token_str)
+                and token_str[i].startswith("SB010")
+                and token_str[i + 1].startswith("SF010")
+                and token_str[i + 2] == "IMAGE"):
+                # Skip one small forward+backward segment (usually 1 cell each)
+                fp_index = min(fp_index + 2, len(full_path) - 1)
+                i += 2  # skip these moves but keep IMAGE later
+            else:
+                cleaned_path.append(full_path[fp_index])
+                fp_index += 1
+            i += 1
+    else:
+        cleaned_path = list(full_path)
 
     # --- NEW: save visit order as a 1-D JSON array of obstacle IDs ---
     visit_order_ids = [ids[i] for i in order] if order else []
