@@ -830,15 +830,65 @@ def save_movement_trace(trace, path="movement_trace.json"):
 # =========================
 # Multi-target routing (Hamiltonian shortest-time via Held–Karp)
 # =========================
-def _scan_goal_for_item(item):
-    """From {"rc":(r,c), "side": 'N'|'S'|'E'|'W'} compute (goal_rc, goal_theta, approach_rc)."""
-    (r, c) = item["rc"]
+def _scan_goal_for_item(item, grid_blocked):
+    """
+    Compute a scan target (goal_rc, goal_theta, approach_rc).
+
+    Preference order:
+      (1) goal with 2-grid (20 cm) edge clearance between robot and obstacle
+      (2) fallback to 1-grid (10 cm) clearance if 2-grid unreachable
+    """
+    r, c = item["rc"]
     side = item["side"].upper()
-    cand_list = scan_candidates_for_obstacle_cell(r, c, side, offset=SCAN_OFFSET_CELLS, lateral_span=0)
-    goal_rc = cand_list[0]  # guaranteed non-empty by helper
-    dr_req, dc_req = DIR_FOR_SIDE[side]
-    goal_theta = dir_to_theta(dr_req, dc_req)
-    approach_rc = (goal_rc[0] - dr_req, goal_rc[1] - dc_req)
+
+    preferred_offsets = [SCAN_OFFSET_CELLS+1, SCAN_OFFSET_CELLS]
+
+    goal_rc = None
+    goal_theta = None
+    approach_rc = None
+    chosen_offset = None
+
+    # Try offsets in decreasing safety order
+    for offset in preferred_offsets:
+        cands = scan_candidates_for_obstacle_cell(
+            r, c, side, offset=offset, lateral_span=0
+        )
+        if not cands:
+            continue
+        rr, cc = cands[0]
+        if not in_bounds(rr, cc):
+            continue
+        if grid_blocked[rr, cc]:  # blocked by inflated obstacles
+            continue
+
+        # Compute facing & approach cells
+        dr_req, dc_req = DIR_FOR_SIDE[side]
+        theta = dir_to_theta(dr_req, dc_req)
+        approach_rc = (rr - dr_req, cc - dc_req)
+
+        # Check approach cell is valid & collision‑free
+        if not in_bounds(*approach_rc) or grid_blocked[approach_rc]:
+            continue
+
+        # --- Verify actual reachability by A* ---
+        seg, _ = astar_with_cost(grid_blocked, START_RC, approach_rc, theta)
+        if seg:
+            goal_rc = (rr, cc)
+            goal_theta = theta
+            chosen_offset = offset
+            break  # success at this offset
+
+    # Fallback if both offsets impossible → use smallest
+    if goal_rc is None:
+        fallback = scan_candidates_for_obstacle_cell(
+            r, c, side, offset=preferred_offsets[-1], lateral_span=0
+        )[0]
+        dr_req, dc_req = DIR_FOR_SIDE[side]
+        goal_theta = dir_to_theta(dr_req, dc_req)
+        goal_rc = fallback
+        approach_rc = (goal_rc[0] - dr_req, goal_rc[1] - dc_req)
+        chosen_offset = preferred_offsets[-1]
+        
     return goal_rc, goal_theta, approach_rc
 
 def plan_route_tsp(grid_blocked, blocked_clearance, start_state, obstacles_with_sides):
@@ -852,7 +902,7 @@ def plan_route_tsp(grid_blocked, blocked_clearance, start_state, obstacles_with_
     # Build nodes
     nodes = []
     for item in obstacles_with_sides:
-        goal_rc, goal_theta, approach_rc = _scan_goal_for_item(item)
+        goal_rc, goal_theta, approach_rc = _scan_goal_for_item(item, grid_blocked)
         nodes.append({"goal": goal_rc, "theta": goal_theta, "approach": approach_rc})
 
     # Feasibility: discard nodes whose scan cell or approach is blocked/out-of-bounds
