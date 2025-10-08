@@ -272,7 +272,7 @@ SPEED_CM_S = 20.0      # robot linear speed in cm/s
 
 # Primitive **times** (seconds)
 FORWARD_COST = CELL_CM / SPEED_CM_S
-BACKWARD_COST = FORWARD_COST * 1.10
+BACKWARD_COST = FORWARD_COST
 ARC_COST = (math.pi * TURNING_RADIUS * CELL_CM / 2.0) / SPEED_CM_S
 
 RECOGNITION_TIME_S = 2.0
@@ -770,22 +770,19 @@ def movements_from_path(full_path, breaks, scans_rc, time_limit=TIME_LIMIT_S):
                 tokens.append(f"SB{dist:03d}")
         elif s['type'] == 'ARC_FWD':
             if s['direction']=='LEFT':
-                tokens.append("SB003")
                 tokens.append("LF090")
-                tokens.append("SF001")
-            else:
-                tokens.append("SB004")
-                tokens.append("RF089")
-                tokens.append("SB002")
-        elif s['type'] == 'ARC_BWD':
-            if s['direction']=='LEFT':
-                tokens.append("SB003")
-                tokens.append("RB088")
                 tokens.append("SF007")
             else:
-                tokens.append("SB007")
-                tokens.append("LB087")
-                tokens.append("SB002")
+                tokens.append("SB004")
+                tokens.append("RF090")
+                tokens.append("SB004")
+        elif s['type'] == 'ARC_BWD':
+            if s['direction']=='LEFT':
+                tokens.append("RB090")
+                tokens.append("SF007")
+            else:
+                tokens.append("LB090")
+                tokens.append("SB004")
         elif s['type'] == 'RECOGNIZE':
             tokens.append("IMAGE")
     
@@ -1494,7 +1491,7 @@ def task1(json_payload=None):
     # --- END NEW ---
 
     # 5) Animate path
-    animate_path(blocked, obstacles_rc, scans, order, full_path, breaks)
+    # animate_path(blocked, obstacles_rc, scans, order, full_path, breaks)
 
 if __name__ == "__main__":
     # For manual testing you can still pass a JSON file path and we’ll load & run it.

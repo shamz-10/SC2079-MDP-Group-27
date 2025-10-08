@@ -272,7 +272,7 @@ SPEED_CM_S = 20.0      # robot linear speed in cm/s
 
 # Primitive **times** (seconds)
 FORWARD_COST = CELL_CM / SPEED_CM_S
-BACKWARD_COST = FORWARD_COST * 1.10
+BACKWARD_COST = FORWARD_COST 
 ARC_COST = (math.pi * TURNING_RADIUS * CELL_CM / 2.0) / SPEED_CM_S
 
 RECOGNITION_TIME_S = 2.0
@@ -1140,7 +1140,7 @@ def animate_path(grid_blocked, obstacles_rc, scans_rc, visit_order, full_path, b
     total_frames = last_frame + 1
     ani = animation.FuncAnimation(
         fig, update, frames=total_frames,
-        init_func=init, interval=120, blit=True, repeat=False
+        init_func=init, interval=240, blit=True, repeat=False
     )
 
     plt.show()
