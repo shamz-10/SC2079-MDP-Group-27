@@ -346,26 +346,32 @@ def cells_between(a, b):
 
         return cells
 
-    # === 3) 90° BACKWARD arcs (right or left) ===
-    # Example: going backwards while rotating
-    if heading_change in (180 + 90, 180 + 270):  # 270 or 90 mod 360 resolves similarly
-        # we can reuse the pattern but mirror directions
+    # ==== 3) 90° BACKWARD arcs ====
+    if heading_change in (180 + 90, 180 + 270):
         direction = "RIGHT" if heading_change == 270 else "LEFT"
-        # back off one cell first
+
+        # Move three cells backward before starting the lateral sweep
         r_back1 = ra - fdr_a
         c_back1 = ca - fdc_a
         r_back2 = ra - 2 * fdr_a
         c_back2 = ca - 2 * fdc_a
+        r_back3 = ra - 3 * fdr_a
+        c_back3 = ca - 3 * fdc_a
+        # r_back4 = ra - 4 * fdr_a
+        # c_back4 = ca - 4 * fdc_a
 
-        for (rr, cc) in [(r_back1, c_back1), (r_back2, c_back2)]:
+        for (rr, cc) in [(r_back1, c_back1), (r_back2, c_back2), (r_back3, c_back3)]:
             if in_bounds(rr, cc):
                 cells.append((rr, cc))
 
-        for k in range(1, 4):
-            r_sweep = r_back2 - k * fdr_b
-            c_sweep = c_back2 - k * fdc_b
+        # Then sweep one cells laterally behind that third backward cell
+        step_dir = (fdr_b, fdc_b)
+        for k in range(1, 2):
+            r_sweep = r_back3 - k * fdr_b
+            c_sweep = c_back3 - k * fdc_b
             if in_bounds(r_sweep, c_sweep):
                 cells.append((r_sweep, c_sweep))
+
         return cells
 
 def transition_collision_free(a, b, grid_blocked):
