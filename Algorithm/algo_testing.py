@@ -367,8 +367,8 @@ def cells_between(a, b):
         # Then sweep one cells laterally behind that third backward cell
         step_dir = (fdr_b, fdc_b)
         for k in range(1, 2):
-            r_sweep = r_back3 - k * fdr_b
-            c_sweep = c_back3 - k * fdc_b
+            r_sweep = r_back4 - k * fdr_b
+            c_sweep = c_back4 - k * fdc_b
             if in_bounds(r_sweep, c_sweep):
                 cells.append((r_sweep, c_sweep))
 
