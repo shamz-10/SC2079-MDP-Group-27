@@ -322,19 +322,25 @@ def cells_between(a, b):
     # === 2) 90° FORWARD arcs (right or left) ===
     # Example: ta=0 (N), tb=90 (E) => forward-right turn
     if heading_change in (90, 270):
-        # forward + lateral (right or left)
+    # forward + lateral (right or left)
         direction = "RIGHT" if heading_change == 90 else "LEFT"
 
-        # Forward step before beginning arc
-        r_front = ra + fdr_a
-        c_front = ca + fdc_a
-        cells.append((r_front, c_front))
+        # Step 1–2: move two steps forward before the lateral sweep
+        r_front1 = ra + fdr_a
+        c_front1 = ca + fdc_a
+        r_front2 = ra + 2 * fdr_a
+        c_front2 = ca + 2 * fdc_a
 
-        # Sweep 3 cells laterally (covers robot radius during turn)
-        step_dir = (fdr_b, fdc_b) if direction == "RIGHT" else (fdr_b, fdc_b)
-        for k in range(1, 4):
-            r_sweep = r_front + k * fdr_b
-            c_sweep = c_front + k * fdc_b
+        # Add both forward steps
+        for (rr, cc) in [(r_front1, c_front1), (r_front2, c_front2)]:
+            if in_bounds(rr, cc):
+                cells.append((rr, cc))
+
+        # Step 3: sweep 3 cells laterally from the second forward step
+        step_dir = (fdr_b, fdc_b)
+        for k in range(1, 4):  # three lateral samples
+            r_sweep = r_front2 + k * fdr_b
+            c_sweep = c_front2 + k * fdc_b
             if in_bounds(r_sweep, c_sweep):
                 cells.append((r_sweep, c_sweep))
 
@@ -346,13 +352,18 @@ def cells_between(a, b):
         # we can reuse the pattern but mirror directions
         direction = "RIGHT" if heading_change == 270 else "LEFT"
         # back off one cell first
-        r_back = ra - fdr_a
-        c_back = ca - fdc_a
-        cells.append((r_back, c_back))
-        # then sweep 3 cells laterally behind
+        r_back1 = ra - fdr_a
+        c_back1 = ca - fdc_a
+        r_back2 = ra - 2 * fdr_a
+        c_back2 = ca - 2 * fdc_a
+
+        for (rr, cc) in [(r_back1, c_back1), (r_back2, c_back2)]:
+            if in_bounds(rr, cc):
+                cells.append((rr, cc))
+
         for k in range(1, 4):
-            r_sweep = r_back - k * fdr_b
-            c_sweep = c_back - k * fdc_b
+            r_sweep = r_back2 - k * fdr_b
+            c_sweep = c_back2 - k * fdc_b
             if in_bounds(r_sweep, c_sweep):
                 cells.append((r_sweep, c_sweep))
         return cells
