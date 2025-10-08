@@ -371,6 +371,11 @@ def cells_between(a, b):
             c_sweep = c_back3 - k * fdc_b
             if in_bounds(r_sweep, c_sweep):
                 cells.append((r_sweep, c_sweep))
+        
+        r_sweep_opp = r_back3 + k * fdr_b
+        c_sweep_opp = c_back3 + k * fdc_b
+        if in_bounds(r_sweep_opp, c_sweep_opp):
+            cells.append((r_sweep_opp, c_sweep_opp))
 
         return cells
 
