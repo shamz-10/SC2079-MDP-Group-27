@@ -357,18 +357,18 @@ def cells_between(a, b):
         c_back2 = ca - 2 * fdc_a
         r_back3 = ra - 3 * fdr_a
         c_back3 = ca - 3 * fdc_a
-        r_back4 = ra - 4 * fdr_a
-        c_back4 = ca - 4 * fdc_a
+        # r_back4 = ra - 4 * fdr_a
+        # c_back4 = ca - 4 * fdc_a
 
-        for (rr, cc) in [(r_back1, c_back1), (r_back2, c_back2), (r_back3, c_back3), (r_back4, c_back4)]:
+        for (rr, cc) in [(r_back1, c_back1), (r_back2, c_back2), (r_back3, c_back3)]:
             if in_bounds(rr, cc):
                 cells.append((rr, cc))
 
         # Then sweep one cells laterally behind that third backward cell
         step_dir = (fdr_b, fdc_b)
         for k in range(1, 2):
-            r_sweep = r_back4 - k * fdr_b
-            c_sweep = c_back4 - k * fdc_b
+            r_sweep = r_back3 - k * fdr_b
+            c_sweep = c_back3 - k * fdc_b
             if in_bounds(r_sweep, c_sweep):
                 cells.append((r_sweep, c_sweep))
 
