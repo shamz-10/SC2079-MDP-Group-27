@@ -180,10 +180,10 @@ OFFSET_ARC = 3
 # =========================
 # Grid helpers
 # =========================
-# def in_bounds(r, c):
-#     return 0 <= r < NCELLS and 0 <= c < NCELLS
-
 def in_bounds(r, c):
+    return 0 <= r < NCELLS and 0 <= c < NCELLS
+
+def in_bounds_robot(r, c):
     # For a 3x3 robot, check that the full footprint is inside the grid
     return (
         0 <= r - INFLATE_RADIUS and r + INFLATE_RADIUS < NCELLS and
@@ -272,7 +272,7 @@ SPEED_CM_S = 20.0      # robot linear speed in cm/s
 
 # Primitive **times** (seconds)
 FORWARD_COST = CELL_CM / SPEED_CM_S
-BACKWARD_COST = FORWARD_COST * 1.10
+BACKWARD_COST = FORWARD_COST
 ARC_COST = (math.pi * TURNING_RADIUS * CELL_CM / 2.0) / SPEED_CM_S
 
 RECOGNITION_TIME_S = 2.0
@@ -287,7 +287,7 @@ def dir_to_theta(dr, dc):
     raise ValueError(f"No heading matches direction {(dr, dc)}")
 
 def collision_free_cell(r, c, grid_blocked):
-    return in_bounds(r, c) and (not grid_blocked[r, c])
+    return in_bounds_robot(r, c) and (not grid_blocked[r, c])
 
 
 def cells_between(a, b):
@@ -475,7 +475,7 @@ def astar(grid_blocked, start, goal_rc, goal_theta=None):
     """
     sr, sc, stheta = start
     gr, gc = goal_rc
-    if not in_bounds(sr, sc) or not in_bounds(gr, gc):
+    if not in_bounds_robot(sr, sc) or not in_bounds_robot(gr, gc):
         return []
     if grid_blocked[sr, sc] or grid_blocked[gr, gc]:
         return []
@@ -1217,7 +1217,7 @@ def animate_path(grid_blocked, obstacles_rc, scans_rc, visit_order, full_path, b
     total_frames = last_frame + 1
     ani = animation.FuncAnimation(
         fig, update, frames=total_frames,
-        init_func=init, interval=120, blit=True, repeat=False
+        init_func=init, interval=300, blit=True, repeat=False
     )
 
     plt.show()
@@ -1355,7 +1355,7 @@ def nearest_free_center(blocked, start_rc):
         r, c = q.popleft()
         for dr, dc in directions:
             nr, nc = r + dr, c + dc
-            if not in_bounds(nr, nc) or (nr, nc) in seen:
+            if not in_bounds_robot(nr, nc) or (nr, nc) in seen:
                 continue
             seen.add((nr, nc))
             if not blocked[nr, nc]:
