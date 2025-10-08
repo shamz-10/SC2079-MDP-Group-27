@@ -339,8 +339,8 @@ def cells_between(a, b):
         # Step 3: sweep 3 cells laterally from the second forward step
         step_dir = (fdr_b, fdc_b)
         for k in range(1, 4):  # three lateral samples
-            r_sweep = r_front2 + k * fdr_b
-            c_sweep = c_front2 + k * fdc_b
+            r_sweep = r_front1 + k * fdr_b
+            c_sweep = c_front1 + k * fdc_b
             if in_bounds(r_sweep, c_sweep):
                 cells.append((r_sweep, c_sweep))
 
@@ -788,7 +788,7 @@ def movements_from_path(full_path, breaks, scans_rc, time_limit=TIME_LIMIT_S):
         elif s['type'] == 'ARC_FWD':
             if s['direction']=='LEFT':
                 tokens.append("LF090")
-                tokens.append("SF007")
+                tokens.append("SF004")
             else:
                 tokens.append("SB004")
                 tokens.append("RF090")
@@ -798,8 +798,8 @@ def movements_from_path(full_path, breaks, scans_rc, time_limit=TIME_LIMIT_S):
                 tokens.append("RB090")
                 tokens.append("SF007")
             else:
+                tokens.append("SB007")
                 tokens.append("LB090")
-                tokens.append("SB004")
         elif s['type'] == 'RECOGNIZE':
             tokens.append("IMAGE")
     
