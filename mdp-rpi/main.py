@@ -4,7 +4,7 @@ from stm import STMInterface
 from camera import get_image
 from threading import Thread
 
-TASK_2 = False
+TASK_2 = True
 
 class RPiMain:
     def __init__(self, task2):
@@ -65,15 +65,6 @@ class RPiMain:
         self.cleanup()
 
         print("[RPiMain] Exiting RPiMain...")
-        
-#        while True:
-#            capture_and_send_image_thread = Thread(target=self.send_image_to_pc(final_image=True), daemon=True)
-#            capture_and_send_image_thread.start()
-#        
-#    def send_image_to_pc(self, final_image:bool):
-#        # Send captured image to PC
-#        print("[STM] Adding image from camera to PC message queue")
-#        self.PC.msg_queue.put(get_image(final_image=final_image))   
 
 if __name__ == "__main__":
     rpi = RPiMain(TASK_2)

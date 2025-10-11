@@ -12,7 +12,7 @@ from image_recognition.stitch_images import stitching_images
 from Algorithm.task1_manager import Task1Manager
 
 # Configuration
-TASK_2 = False  #TODO: Change to False for task 1, True for task 2
+TASK_2 = True  #TODO: Change to False for task 1, True for task 2
 NUM_OF_RETRIES = 1  # Number of retries for image inference if no detections
 
 # Constants
@@ -33,8 +33,6 @@ class PCClient:
         self.task_2 = TASK_2
         self.obs_order_count = 0
         self.image_id_set = set()
-
-        # NEW: provide a t1 object compatible with your old calls
         self.t1 = Task1Manager()
 
     def connect(self):
@@ -113,6 +111,7 @@ class PCClient:
 
                 message = json.loads(message)
 
+                # Task 1 start
                 if message["type"] == "START_TASK":
                     # Generate movement_trace.json using algo, then send segment-by-segment
                     try:
@@ -130,10 +129,10 @@ class PCClient:
                     else:
                         print("[PC Client] No NAVIGATION segment available (maybe END).")
 
-                # TODO: Task 2 implementation
-                # elif message["type"] == "FASTEST_PATH":
-                #     command = {"type": "FASTEST_PATH"}
-                #     self.msg_queue.put(json.dumps(command))
+                # Task 2 start
+                elif message["type"] == "FASTEST_PATH":
+                    command = {"type": "FASTEST_PATH"}
+                    self.msg_queue.put(json.dumps(command))
                 
                 # elif message["type"] == "test":
                 #     message = {"type": "IMAGE_RESULTS", "data": {"obs_id": "3", "img_id": "39"}}

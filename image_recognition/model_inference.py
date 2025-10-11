@@ -8,8 +8,7 @@ import torch
 
 # Add your model paths here
 TASK_1_V1_MODEL_CONFIG = {"conf":0.803, "path":Path("image_recognition") / "models" /"v3.pt"}
-TASK_1_V2_MODEL_CONFIG = {"conf":0.791, "path":Path("image_recognition") / "runs" / "detect" / "train task_1" / "weights" / "best.pt"}
-TASK_2_MODEL_CONFIG = {"conf":0.868, "path":Path("image_recognition") / "runs" / "detect" / "train task_2" / "weights" / "best.pt"}
+TASK_2_MODEL_CONFIG = {"conf":0.868, "path":Path("image_recognition") / "models" /"v3.pt"}
 
 # Check if GPU is available and move the model to the device
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -73,19 +72,14 @@ def image_inference(image_or_path, obs_id, image_counter, image_id_map:list[str]
     model_2 = None
     
     # Initialize the YOLO model
-    # if not task_2:
-    #     model = YOLO(TASK_1_V1_MODEL_CONFIG["path"]) # The better model.
-    #     conf = TASK_1_V1_MODEL_CONFIG["conf"]
-    #     model_2 = YOLO(TASK_1_V2_MODEL_CONFIG["path"]) # Backup 2nd model.
-    #     conf_2 = TASK_1_V2_MODEL_CONFIG["conf"]
-    # else:
-    #     model = YOLO(TASK_2_MODEL_CONFIG["path"]) # The better model.
-    #     conf = TASK_2_MODEL_CONFIG["conf"]
-    #     model_2 = YOLO(TASK_1_V2_MODEL_CONFIG["path"]) # # Backup 2nd model.
-    #     conf_2 = TASK_1_V2_MODEL_CONFIG["conf"]
+    if not task_2:
+        model = YOLO(TASK_1_V1_MODEL_CONFIG["path"])
+        conf = TASK_1_V1_MODEL_CONFIG["conf"]
+    else:
+        model = YOLO(TASK_2_MODEL_CONFIG["path"])
+        conf = TASK_2_MODEL_CONFIG["conf"]
 
-    model = YOLO(TASK_1_V1_MODEL_CONFIG["path"]) # The better model.
-    conf = TASK_1_V1_MODEL_CONFIG["conf"]
+
 
     model.to(device)
     print("Model loaded and moved to device:", device)
@@ -105,32 +99,10 @@ def image_inference(image_or_path, obs_id, image_counter, image_id_map:list[str]
 
     largest_bbox_label, largest_bbox_area = find_largest_bbox_label(bboxes)
 
-    # If no label picked up, run backup model
-    # if largest_bbox_label is None and model_2:
-    #     model_2.to(device)
-    #     bboxes_2 = []
-    #     results_2 = model_2.predict(source=image_or_path, verbose=False, project="./captured_images", name=f"{img_name}_2", save=True, save_txt=True, save_conf=True, imgsz=640, conf=conf_2, device=device)
-        
-    #     for r2 in results_2:
-    #     # Iterate over each object
-    #         for c2 in r2:
-    #             label = c2.names[c2.boxes.cls.tolist().pop()][0:2] # 2nd model label name
-    #             if label[0]=="0":
-    #                 label = label[0]
-    #             # If label previously detected, skip
-    #             if label in image_id_map and not task_2:
-    #                 continue
-    #             bboxes_2.append({"label": label, "xywh": c2.boxes.xywh.tolist().pop()})
-        
-    #     largest_bbox_label_2, largest_bbox_area_2 = find_largest_bbox_label(bboxes_2)
 
     # take model 1 if there is results, since it's better.
     if largest_bbox_area:
         img_name = img_name + "_1"
-    # else:
-    #     largest_bbox_label = largest_bbox_label_2
-    #     largest_bbox_area = largest_bbox_area_2
-    #     img_name = img_name + "_2"
 
     if task_2:
         name_of_image = f"task2_obs_id_{obs_id}_{image_counter}.jpg"
