@@ -369,13 +369,13 @@ def cells_between(a, b):
         for k in range(1, 2):
             r_sweep = r_back3 - k * fdr_b
             c_sweep = c_back3 - k * fdc_b
+            r_sweep_opp = r_back3 + k * fdr_b
+            c_sweep_opp = c_back3 + k * fdc_b
             if in_bounds(r_sweep, c_sweep):
                 cells.append((r_sweep, c_sweep))
-        
-        r_sweep_opp = r_back3 + k * fdr_b
-        c_sweep_opp = c_back3 + k * fdc_b
-        if in_bounds(r_sweep_opp, c_sweep_opp):
-            cells.append((r_sweep_opp, c_sweep_opp))
+            if in_bounds(r_sweep_opp, c_sweep_opp):
+                cells.append((r_sweep_opp, c_sweep_opp))
+            
 
         return cells
 
@@ -792,19 +792,19 @@ def movements_from_path(full_path, breaks, scans_rc, time_limit=TIME_LIMIT_S):
                 tokens.append(f"SB{dist:03d}")
         elif s['type'] == 'ARC_FWD':
             if s['direction']=='LEFT':
+                tokens.append("SB005")
                 tokens.append("LF090")
-                tokens.append("SF004")
             else:
                 tokens.append("SB004")
                 tokens.append("RF090")
-                tokens.append("SB004")
         elif s['type'] == 'ARC_BWD':
             if s['direction']=='LEFT':
                 tokens.append("RB090")
                 tokens.append("SF007")
             else:
-                tokens.append("SB007")
+                tokens.append("SB005")
                 tokens.append("LB090")
+                tokens.append("SF002")
         elif s['type'] == 'RECOGNIZE':
             tokens.append("IMAGE")
     
