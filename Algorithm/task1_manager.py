@@ -1,6 +1,6 @@
 import json
 
-from Algorithm import algo_testing as algo
+from Algorithm import algo_final as algo
 
 
 class Task1Manager:
