@@ -8,7 +8,7 @@ import torch
 
 # Add your model paths here
 TASK_1_V1_MODEL_CONFIG = {"conf":0.803, "path":Path("image_recognition") / "models" /"v3.pt"}
-TASK_2_MODEL_CONFIG = {"conf":0.868, "path":Path("image_recognition") / "models" /"v3.pt"}
+TASK_2_MODEL_CONFIG = {"conf":0.70, "path":Path("image_recognition") / "models" /"task2.pt"}
 
 # Check if GPU is available and move the model to the device
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -56,6 +56,10 @@ def find_largest_bbox_label(bboxes):
         if label == "11":
             width *= 1.2
 
+        #Only allow image IDs 37 and 38 for Task 2
+        if label not in ["38", "39"]:
+            continue
+
         bbox_area = width * height
         if bbox_area > largest_bbox_area:
             largest_bbox_area = bbox_area
@@ -98,7 +102,12 @@ def image_inference(image_or_path, obs_id, image_counter, image_id_map:list[str]
     results[0].show()
 
     largest_bbox_label, largest_bbox_area = find_largest_bbox_label(bboxes)
+    x_center, y_center, width, height = None, None, None, None
+    for bbox in bboxes:
+        x_center, y_center, width, height = bbox['xywh']
 
+    if x_center is None:
+        x_center = 320 # Default to center if no bounding box found
 
     # take model 1 if there is results, since it's better.
     if largest_bbox_area:
@@ -109,16 +118,28 @@ def image_inference(image_or_path, obs_id, image_counter, image_id_map:list[str]
     else:
         name_of_image = f"task1_obs_id_{obs_id}_{image_counter}.jpg"
 
-    image_prediction = {
-        "type": "IMAGE_RESULTS",
-        "data": {
-            "obs_id": obs_id, 
-            "img_id": largest_bbox_label, 
-            "bbox_area": largest_bbox_area
-            },
+    if task_2:
+        image_prediction = {
+            "type": "IMAGE_RESULTS",
+            "data": {
+                "obs_id": obs_id, 
+                "img_id": largest_bbox_label, 
+                "bbox_area": largest_bbox_area,
+                "x_center": x_center,
+                },
+            "image_path": Path("captured_images") / img_name / name_of_image
+            }
+        
+    else:
+        image_prediction = {
+            "type": "IMAGE_RESULTS",
+            "data": {
+                "obs_id": obs_id, 
+                "img_id": largest_bbox_label, 
+                "bbox_area": largest_bbox_area,
+                },
         "image_path": Path("captured_images") / img_name / name_of_image
         }
-    
 
 
     return image_prediction
@@ -129,8 +150,9 @@ if __name__ == '__main__':
     # image_path = Path("test") / "16.jpg"
     # _ = image_inference(image_path, "00", 0,[])
 
-    
-    model = YOLO(TASK_1_V1_MODEL_CONFIG["path"]) # The better model.
-    folder_path = Path("test")
-    predict_multiple_images(folder_path, model)
+    model = YOLO(TASK_2_MODEL_CONFIG["path"])
+    print("Available classes:", model.names)
+    # model = YOLO(TASK_1_V1_MODEL_CONFIG["path"]) # The better model.
+    # folder_path = Path("test")
+    # predict_multiple_images(folder_path, model)
 
