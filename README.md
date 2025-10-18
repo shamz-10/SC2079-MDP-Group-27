@@ -212,6 +212,7 @@ python3 main.py
     <td align="center"><a href="https://github.com/ayyyman22"><img src="https://avatars.githubusercontent.com/ayyyman22" width="100px;" alt=""/><br /><sub><b>Ayman</b></sub></a><br /></td>
     <td align="center"><a href="https://github.com/CradleStrife"><img src="https://avatars.githubusercontent.com/CradleStrife" width="100px;" alt=""/><br /><sub><b>Lai Yi</b></sub></a><br /></td>
     <td align="center"><a href="https://github.com/JeremyCEY"><img src="https://avatars.githubusercontent.com/JeremyCEY" width="100px;" alt=""/><br /><sub><b>En Yao</b></sub></a><br /></td>
+    <td align="center"><a href="https://github.com/27July"><img src="https://avatars.githubusercontent.com/27July" width="100px;" alt=""/><br /><sub><b>Zi Hao</b></sub></a><br /></td>
   </tr>
 </table>
 
