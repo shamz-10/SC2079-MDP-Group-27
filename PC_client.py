@@ -156,14 +156,22 @@ class PCClient:
                         img_file.write(decoded_image)
 
                     # print("Before calling image recognition model")
-
-                    image_prediction = model_inference.image_inference(
-                        image_or_path=image_path,
-                        obs_id=str(self.t1.obs_order[int(obs_id)]), 
-                        image_counter=image_counter, 
-                        image_id_map=[],
-                        task_2=self.task_2
-                    )
+                    if self.task_2:
+                        image_prediction = model_inference.image_inference(
+                            image_or_path=image_path,
+                            obs_id=str(obs_id),
+                            image_counter=image_counter, 
+                            image_id_map=[],
+                            task_2=self.task_2
+                        )
+                    else:
+                        image_prediction = model_inference.image_inference(
+                            image_or_path=image_path,
+                            obs_id=str(self.t1.obs_order[int(obs_id)]), 
+                            image_counter=image_counter, 
+                            image_id_map=[],
+                            task_2=self.task_2
+                        )
                     # If not final image, store the prediction for potential back-tracing
                     self.image_record.append(image_prediction)
                     image_counter += 1
@@ -180,13 +188,13 @@ class PCClient:
 
                         # TODO: Comment out if expecting no detections
                         # If still no detections, move back to last obstacle and retry once
-                        if image_prediction['data']['img_id'] == None and NUM_OF_RETRIES > retries:
+                        # if image_prediction['data']['img_id'] == None and NUM_OF_RETRIES > retries:
 
-                            last_path = command['data']['path'][-1]
-                            command = {"type": "NAVIGATION", "data": {"commands": ['SB010','IMAGE','SF010'], "path": [last_path, last_path]}}
-                            self.msg_queue.put(json.dumps(command))
-                            retries += 1
-                            continue
+                        #     last_path = command['data']['path'][-1]
+                        #     command = {"type": "NAVIGATION", "data": {"commands": ['SB010','IMAGE','SF010'], "path": [last_path, last_path]}}
+                        #     self.msg_queue.put(json.dumps(command))
+                        #     retries += 1
+                        #     continue
 
                         #################### Duplicate image id check ####################
                         # TODO: Uncomment if want to prevent duplicate image ids, but risk messing up downstream if earlier images registered the wrong image id
@@ -208,8 +216,8 @@ class PCClient:
                         image_path = image_prediction["image_path"] 
                         
                         # if no detections
-                        if not os.path.exists(image_path):
-                            image_path = f"captured_images/task1_obs_id_{self.t1.obs_order[int(obs_id)]}_{image_counter-1}.jpg"
+                        # if not os.path.exists(image_path):
+                        #     image_path = f"captured_images/task1_obs_id_{self.t1.obs_order[int(obs_id)]}_{image_counter-1}.jpg"
 
                         print("Image path: ",image_path)
                         print("Destination file: ",destination_file)
@@ -234,6 +242,10 @@ class PCClient:
                         retries = 0
                         if self.task_2:
                             obs_id += 1       
+
+                        if self.task_2:
+                            if obs_id > 1:
+                                stitching_images(r'images_result', r'image_recognition/stitched_image.jpg')
 
                         # Update self.t1 to input new path, may put this above the image inference if we don't want to wait and stop
                         if not self.t1.has_task_ended():

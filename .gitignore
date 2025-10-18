@@ -1,6 +1,5 @@
 .DS_Store
 /captured_images/
-*.pyc
 *.jpg
 /venv
 /image_result/
