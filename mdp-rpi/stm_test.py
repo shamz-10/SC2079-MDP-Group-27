@@ -1,7 +1,6 @@
-import json
-from queue import Queue
-import time
-import serial
+from queue import Queue 
+import time 
+import serial 
 import time
 
 STM_BAUDRATE = 115200
@@ -12,10 +11,33 @@ STM_GYRO_RESET_DELAY = 4 # time to wait for gyro reset
 STM_SERIAL_PORT = "/dev/ttyACM0"  # Adjust as necessary
 
 #### TO ADJUST BASED ON TESTING
-STM_NAV_COMMAND = ["RF020", "LB045"]
+#STM_NAV_COMMAND = ["START", "CORRE","SNAPP",
+#                  "LF060","RF060","RF060","LF060",
+#                  "START","CORRE", "SNAPP", "RF089", 
+#                  "SB010","WL999","LF179", "WL999", "SF005", "LF087", "HOMEE", 
+#                  "LF090", "DUMEE", "RF090","START","ENYAO"]
+
+#STM_NAV_COMMAND = ["START", "CORRE","SNAPP",
+#                  "RF058","LF058","LF058","RF058",
+#                  "START","CORRE", "SNAPP", "LF089", 
+#                  "SB010","WR999","RF179", "WR999", "SF005", "RF087", "HOMEE", 
+#                  "RF090", "DUMEE", "LF090","START","ENYAO"]
+
+#STM_NAV_COMMAND = ["START", "CORRE","SNAPP",
+#                  "RF058","LF058","LF058","RF058",
+#                  "START","CORRE", "SNAPP", "RF089", 
+#                  "SB010","WL999","LF179", "WL999", "SF005", "LF087", "HOMEE", 
+#                  "LF090", "DUMEE", "RF090","START","ENYAO"]
+
+#STM_NAV_COMMAND = ["CORRE"]
+#STM_NAV_COMMAND = ["WL999"]
+STM_NAV_COMMAND = ["WR999"]
 ##############################################
 
-class STMInterface:
+class STMTestInterface:
+    """
+    Test interface to send STM commands from RPI to STM without PC connection
+    """
     def __init__(self):
         self.serial = None
         self.msg_queue = Queue()
@@ -29,10 +51,6 @@ class STMInterface:
             self.clean_buffers()
         except Exception as e:
             print("[STM] ERROR: Failed to connect to STM -", str(e))
-        
-        # Optional: Reset gyroscope at the start
-        # print("[STM] Resetting gyroscope at the start")
-        # self.write_to_stm(STM_GYRO_RESET_COMMAND)
     
     def reconnect(self): 
         # Reconnect to STM by closing the current connection and establishing a new one
@@ -63,38 +81,34 @@ class STMInterface:
                 break
 
         return message
-            
+
     def send(self):
-        # Send commands to STM based on the received messages from PC
-
-        while True:             
-            # Test code without PC
-            message = {
-                "type": "NAVIGATION",
-                "data": {
-                "commands":  STM_NAV_COMMAND, 
-                "path": [],
-                }
+        # Test code without PC
+        message = {
+            "type": "NAVIGATION",
+            "data": {
+            "commands":  STM_NAV_COMMAND, 
+            "path": [],
             }
-            message_type = 'NAVIGATION'
-            # end of test code
+        }
+        message_type = 'NAVIGATION'
+        # end of test code
 
-            if message_type == "NAVIGATION":
-                # Convert/adjust turn or obstacle routing commands
-                commands: list[str] = message["data"]["commands"]
+        if message_type == "NAVIGATION":
+            # Convert/adjust turn or obstacle routing commands
+            commands: list[str] = message["data"]["commands"]
+            
+            # Real code
+            for idx, command in enumerate(commands):
                 
-                # Real code
-                for idx, command in enumerate(commands):
-                    
-                    print("[RPI] Writing to STM:", command)
-                    self.write_to_stm(command)
-            else:
-                print("[STM] WARNING: Rejecting message with unknown type [%s] for STM" % message_type)
+                print("[RPI] Writing to STM:", command)
+                self.write_to_stm(command)
+        else:
+            print("[STM] WARNING: Rejecting message with unknown type [%s] for STM" % message_type)
 
     def write_to_stm(self, command):
         # Write a command to STM, handling exceptions and reconnecting if necessary
         self.clean_buffers()
-        # if self.is_valid_command(command):
         exception = True
         while exception:
             try:
@@ -115,8 +129,7 @@ class STMInterface:
                     print("[STM] Waiting for ACK")
                     self.wait_for_ack()
                     time.sleep(STM_COMMAND_DELAY)
-        # else:
-        #     print(f"[STM] ERROR: Invalid command to STM [{command}]. Skipping...")
+
 
     def wait_for_ack(self):
         # Wait for ACK message from STM
@@ -130,6 +143,6 @@ class STMInterface:
         
     # Run test code without PC
 if __name__ == "__main__":
-    stm = STMInterface()
+    stm = STMTestInterface()
     stm.connect()
     stm.send()

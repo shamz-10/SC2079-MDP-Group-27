@@ -35,8 +35,6 @@ class STMInterface:
                 self.clean_buffers()
             except Exception as e:
                 print("[STM] ERROR: Failed to connect to STM -", str(e))
-        #print("[STM] Resetting STM at the start")
-        #self.write_to_stm(STM_GYRO_RESET_COMMAND)
     
     def reconnect(self): 
         # Reconnect to STM by closing the current connection and establishing a new one
@@ -72,29 +70,11 @@ class STMInterface:
         # Send commands to STM based on the received messages from PC
         # Task 2: return to carpark
         self.second_arrow = None
-        while True: 
-        # for i in range(1): 
-            
-            # Test code without PC
-            if False:
-                message = {
-                    "type": "NAVIGATION",
-                    "data": {
-                    # "commands":  ["LF045", "RF045", "SF040", "RF045", "LF045"],
-                    "commands":  ["YF200"], 
-                    "path": [],
-                    # "path": [[0,1], [1,1], [2,1], [3,1], [3,3]]
-                    }
-                }
-                message_type = 'NAVIGATION'
-                test+=1
-            # end of test code
-            else:
-                # Uncomment once implementation is done
-                message_byte = self.msg_queue.get()
-                message_str = message_byte.decode("utf-8")
-                message = json.loads(message_str)
-                message_type = message["type"]
+        while True:             
+            message_byte = self.msg_queue.get()
+            message_str = message_byte.decode("utf-8")
+            message = json.loads(message_str)
+            message_type = message["type"]
 
             if message_type == "NAVIGATION":
                 # Display path on Android
@@ -112,30 +92,18 @@ class STMInterface:
                             # Start a new thread to capture and send the image to PC
                             capture_and_send_image_thread = threading.Thread(target=self.send_image_to_pc(final_image=False), daemon=True)
                             capture_and_send_image_thread.start()
-                            #capture_and_send_image_thread.join()
-                            #time.sleep(2)
 
                     print("[RPI] Writing to STM:", command)
                     self.write_to_stm(command)
 
                 if self.second_arrow is not None:
-                    self.return_to_carpark()
+                    #self.return_to_carpark()
                     print("[STM] DONE")
                     return
 
                 # Start a new thread to capture and send the image to PC
                 capture_and_send_image_thread = threading.Thread(target=self.send_image_to_pc(final_image=True), daemon=True)
                 capture_and_send_image_thread.start()
-                # temp code
-                # message = {
-                #     "type": 'test'
-                #     }
-
-                # json_message = json.dumps(message)
-                # encode_message = json_message.encode("utf-8")
-                # # Send captured image to PC
-                #self.RPiMain.PC.msg_queue.put(encode_message)
-                # end of temp code
             else:
                 print("[STM] WARNING: Rejecting message with unknown type [%s] for STM" % message_type)
 
@@ -156,44 +124,8 @@ class STMInterface:
                 self.reconnect() 
             else:
                 exception = False
-                if command == STM_GYRO_RESET_COMMAND:
-                    print("[STM] Waiting %ss for reset" % STM_GYRO_RESET_DELAY)
-                    time.sleep(STM_GYRO_RESET_DELAY)
-                elif re.match(STM_XDIST_COMMAND_FORMAT, command):
-                    dist = self.wait_for_dist()
-                    if dist >= 0:
-                        if self.second_arrow == 'L':
-                            if self.move_counter >= 0 and self.move_counter <2:
-                                self.xdist -= dist
-                                print("[STM] updated XDIST =", self.xdist)
-                                self.move_counter += 1
-                            else:
-                                self.xdist += dist
-                                print("[STM] updated XDIST =", self.xdist)
-                        if self.second_arrow == 'R':
-                            if self.move_counter == 1:
-                                self.xdist -= dist
-                            else: 
-                                self.xdist += dist
-                                print("[STM] updated XDIST =", self.xdist)
-                            self.move_counter += 1
-                    else:
-                        print("[STM] ERROR: failed to update XBDIST, received invalid value:", dist)
-                elif re.match(STM_YDIST_COMMAND_FORMAT, command):
-                    dist = self.wait_for_dist()
-                    if dist >= 0: 
-                        self.ydist += dist
-                        print("[STM] updated YDIST =", self.ydist)
-                    else:
-                        print("[STM] ERROR: failed to update YDIST, received invalid value:", dist)
-                else:
-                    #if command=="IMAGE":
-                    #    continue
-                    #else:
-                        print("[STM] Waiting for ACK")
-                        self.wait_for_ack()
-        # else:
-        #     print(f"[STM] ERROR: Invalid command to STM [{command}]. Skipping...")
+                print("[STM] Waiting for ACK")
+                self.wait_for_ack()
 
     def wait_for_ack(self):
         # Wait for ACK message from STM
@@ -201,8 +133,8 @@ class STMInterface:
         print(message)
         if message  == STM_ACK_MSG:
             print("[STM] Received ACK from STM")
-            # Add delay after ack to prevent swerving
-            time.sleep(0.1)#time.sleep(1)
+            # Optional: Add delay after ACK
+            # time.sleep(0.1)
         else:
             print("[STM] ERROR: Unexpected message from STM -", message)
             self.reconnect() 
@@ -238,11 +170,9 @@ class STMInterface:
         except:
             print("[STM] ERROR with path found in NAVIGATION message")    
 
-    def is_valid_command(self, command):
-        # Hard-coded portion for the angle, if the manual correction is not working, then uncomment this
-        
+    def is_valid_command(self, command):        
         # Check if a command is valid according to the defined format
-         if re.match(STM_NAV_COMMAND_FORMAT, command) or command == STM_GYRO_RESET_COMMAND:
+         if re.match(STM_NAV_COMMAND_FORMAT, command):
              return True
          else:
              return False
@@ -252,10 +182,6 @@ class STMInterface:
         # Adjust and combine commands for smoother execution
         def is_turn_command(command):
             return self.is_valid_command(command) and re.match("^[LR]", command)
-
-        def adjust_turn_command(turn_command):
-            return STM_COMMAND_ADJUSTMENT_MAP.get(turn_command, turn_command)
-            # return True
 
         def is_obstacle_routing_command(command):
             return command in STM_OBS_ROUTING_MAP.keys()
@@ -305,16 +231,12 @@ class STMInterface:
         final_commands = []     
         for i in range(len(commands)):
             command = commands[i].upper()
-            #if is_straight_command(command):
             if not self.task2:
                 final_commands = add_command(final_commands, command)
             else:
                 adj_commands = []
-                if is_turn_command(command): 
-                    adj_commands = adjust_turn_command(command)
-                # Just added to check it: 
-                # if is_validturn_command(command):
-                #    adj_commands = adjust_turn_command(command)
+                if is_turn_command(command) and is_validturn_command(command): 
+                    adj_commands = [command]
                 elif is_obstacle_routing_command(command): 
                     adj_commands = adjust_obstacle_routing_command(command)
                 else:
@@ -332,47 +254,3 @@ class STMInterface:
             }
         }
         return json.dumps(message).encode("utf-8")
-    
-    # Task 2: Fastest car
-    def return_to_carpark(self):
-        # Execute the return to carpark procedure based on the obtained information
-        print(f"[STM] Initiating return to carpark: XDIST = {self.xdist}, YDIST = {self.ydist}, ARROW = {self.second_arrow}")
-        commands = self.get_commands_to_carpark()
-        for command in commands:
-            self.write_to_stm(command)
-
-    def get_commands_to_carpark(self):
-        # Calculate the path to return to the carpark based on the obtained information
-        print(f"[STM] Calculating path to carpark...")
-        movement_list = []
-
-        
-        if self.second_arrow == 'L':
-            x_adjustment = self.xdist - 10
-            y_adjustment = self.ydist + 107
-        elif self.second_arrow == 'R':
-            x_adjustment = self.xdist - 52
-            y_adjustment = self.ydist + 45
-
-        movement_list.append(f"SF{y_adjustment:03d}")
-        if self.second_arrow == 'R':
-            movement_list.append("LF090")
-            if x_adjustment > 0:
-                movement_list.append(f"SF{x_adjustment:03d}")
-            else:
-                movement_list.append(f"SB{abs(x_adjustment):03d}")
-            movement_list.append("RF090")
-            movement_list.append("VF100") 
-        elif self.second_arrow == 'L':
-            movement_list.append("RF090")
-            if x_adjustment > 0:
-                movement_list.append(f"SF{x_adjustment:03d}")
-            else:
-                movement_list.append(f"SB{abs(x_adjustment):03d}")
-            movement_list.append("LF090")
-            movement_list.append("VF100") 
-        else:
-            print("[STM] ERROR getting path to carpark, second arrow invalid -", self.second_arrow)
-        
-        print("[STM] Final path to carpark:", movement_list)
-        return movement_list

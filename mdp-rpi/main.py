@@ -1,7 +1,6 @@
 from pc import PCInterface
 from android import AndroidInterface
 from stm import STMInterface
-from camera import get_image
 from threading import Thread
 
 TASK_2 = True
@@ -64,7 +63,7 @@ class RPiMain:
         # Cleanup after threads finish
         self.cleanup()
 
-        print("[RPiMain] Exiting RPiMain...")
+        print("[RPiMain] Exiting RPiMain...") 
 
 if __name__ == "__main__":
     rpi = RPiMain(TASK_2)

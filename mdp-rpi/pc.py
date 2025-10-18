@@ -15,7 +15,6 @@ class PCInterface:
         self.obs_id = 1
         self.task2 = task2
         
-
     def connect(self):
         # Establish a connection with the PC
         if self.client_socket is not None:
@@ -94,23 +93,28 @@ class PCInterface:
                                     direction = "FIRSTLEFT"
                                 else:
                                     direction = "FIRSTRIGHT"
-                                path_message = {"type": "NAVIGATION", "data": {"commands": [direction, "SB025", "YF150"], "path": []}}
+                                path_message = {"type": "NAVIGATION", "data": {"commands": [direction, "START", "CORRE", "SNAPP"], "path": []}}
                                 self.obs_id += 1
                             else:
+                                x_center = parsed_msg["data"]["x_center"]
                                 if parsed_msg["data"]["img_id"] == "39": #left
-                                    direction = "SECONDLEFT"
+                                    if x_center <230:
+                                        direction = "SECONDLEFTALT" #Alternate moveset if bounding box is far left
+                                    else:
+                                        direction = "SECONDLEFT"
                                 else:
-                                    direction = "SECONDRIGHT"
+                                    if x_center >410:
+                                        direction = "SECONDRIGHTALT" #Alternate moveset if bounding box is far right
+                                    else:
+                                        direction = "SECONDRIGHT"
                                 path_message = {"type": "NAVIGATION", "data": {"commands": [direction], "path": []}}
                             
                             json_path_message = json.dumps(path_message)
                             encode_path_message = json_path_message.encode("utf-8")
                             self.RPiMain.STM.msg_queue.put(encode_path_message)
-                        # Temp code: pass
-                        # pass
 
                     elif msg_type == "FASTEST_PATH":
-                        path_message = {"type": "NAVIGATION", "data": {"commands": ["YF150"], "path": []}}
+                        path_message = {"type": "NAVIGATION", "data": {"commands": ["START","CORRE","SNAPP"], "path": []}}
                         json_path_message = json.dumps(path_message)
                         encode_path_message = json_path_message.encode("utf-8")
                         self.RPiMain.STM.msg_queue.put(encode_path_message)
@@ -126,33 +130,12 @@ class PCInterface:
 
     def send(self):
         # Continuously send messages to the PC Client
-        i=2 # test code
         while True:
-            if self.send_message:
-                # for testing
-                if i==1:
-                    pass
-                #     message_ori = {
-                #         "type": "FASTEST_PATH",
-                #         "data": {
-                #         "task": "FASTEST_PATH",
-                #         "robot": {"id": "R", "x": 1, "y": 1, "dir": 'N'},
-                #         "obstacles": [
-                #                 {"id": "00", "x": 4, "y": 15, "dir": 'S'},
-                #                 {"id": "01", "x": 16, "y": 17, "dir": 'W'}
-                #         ]
-                #         }
-                #     }
-                #     message = json.dumps(message_ori)
-                #     i+=1
-                # end of test code
-                else:
-                    # uncomment once ready
-                    message = self.msg_queue.get()
-                    message = message.decode("utf-8")
-
-                
+            if self.send_message:  
+                message = self.msg_queue.get()
+                message = message.decode("utf-8")
                 exception = True
+                
                 while exception:
                     try:
                         message = self.prepend_msg_size(message)
