@@ -9,6 +9,7 @@
   - [Algorithm](#algorithm)
   - [Image Recognition](#image-recognition)
   - [Android Application](#android-application)
+  - [STM](#stm)
 - [Setup and Installation](#setup-and-installation)
 - [Usage](#usage)
 - [Configuration](#configuration)
@@ -49,6 +50,12 @@ SC2079-MDP-Group-27/
 │   ├── movement_trace.json     # Generated path output
 │   ├── obstacle_visit_order.json
 │   └── obstacles.json          # Obstacle configuration
+├── STM/          # STM32 MCU
+│   ├── Src/
+│   │   ├── main.c # Main file
+│   ├── Inc
+│   ├── MDP task2.ioc
+│   ├── MDP task1.ioc
 ├── image_recognition/          # Computer vision module
 │   ├── model_inference.py
 │   ├── stitch_images.py
@@ -117,7 +124,7 @@ The algorithm module handles path planning and navigation logic for the robot.
 - `obstacle_visit_order.json` - Obstacle visiting sequence
 - `obstacles.json` - Obstacle configuration input
 
-#### Features:
+#### Key Features:
 - A* pathfinding with obstacle avoidance
 - Command segmentation for image recognition points
 - Optimal path calculation for obstacle visitation
@@ -141,6 +148,24 @@ Computer vision module using YOLOv8 for image symbol recognition.
 **Location**: *Code not yet pushed*
 
 The Android application provides a user interface for controlling and monitoring the robot.
+
+### STM
+
+**Location**: `/STM/Src/main.c`
+
+The STM acts as the car's control layer to read sensors, drive motors/steering while exposing fixed motion movesets to the Raspberry Pi for safe repeatable movement.
+
+#### Key Files:
+- `main.c` - Main code
+- `MDP task1.ioc` - IOC file for task1
+- `MDP task2.ioc` - IOC file for task2
+- 
+#### Key Features:
+- Sensor fusion for yaw (gyroscope + magnetometer) with angle unwrapping and drift correction for precise turns/heading hold.
+- Real-time motion control on STM32F407: Pulse-Width Modulation (PWM) for DC motors & servo steering with encoder feedback.
+- Closed-loop stopping to target using encoder + ultrasonic/IR guard bands to avoid overshoot into obstacles.
+- Reliable motion primitives: drive distance (cm), turn (°), arc, soft/hard brake—each with tunable PID/PD gains and speed profiles.
+- FreeRTOS architecture: dedicated tasks for control, sensors, and comms with non-blocking software timers; on-device calibration & OLED debug.
 
 ## 🛠 Setup and Installation
 
