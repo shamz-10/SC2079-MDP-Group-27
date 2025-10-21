@@ -53,7 +53,7 @@ SC2079-MDP-Group-27/
 ├── STM/          # STM32 MCU
 │   ├── Src/
 │   │   ├── main.c # Main file
-│   ├── Inc
+│   ├── Inc/
 │   ├── MDP task2.ioc
 │   ├── MDP task1.ioc
 ├── image_recognition/          # Computer vision module
