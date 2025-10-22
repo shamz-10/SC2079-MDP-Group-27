@@ -1,0 +1,9 @@
+<component name="libraryTable">
+  <library name="stm_workspace">
+    <CLASSES>
+      <root url="jar://$PROJECT_DIR$/STM/stm_workspace.zip!/" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES />
+  </library>
+</component>

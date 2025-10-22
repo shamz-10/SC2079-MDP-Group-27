@@ -1,0 +1,7 @@
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- keep the background as is, or replace it -->
+    <background android:drawable="@drawable/ic_launcher_background"/>
+
+    <!-- point foreground to your new logo -->
+    <foreground android:drawable="@drawable/bg_image"/>
+</adaptive-icon>

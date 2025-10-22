@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="purple_200">#90CAF9</color> <!-- light blue -->
+    <color name="purple_500">#2196F3</color> <!-- primary blue -->
+    <color name="purple_700">#1976D2</color> <!-- dark blue -->
+
+    <color name="teal_200">#FFB74D</color>   <!-- light orange -->
+    <color name="teal_700">#F57C00</color>   <!-- deep orange -->
+
+    <color name="black">#212121</color>      <!-- dark gray -->
+    <color name="white">#212121
+    </color>      <!-- true white -->
+
+    <color name="message_utility_button_background">#EEEEEE</color>
+    <color name="background">#F5F5F5</color>         <!-- light gray bg -->
+    <color name="background_dark">#121212</color>    <!-- dark mode bg -->
+
+    <color name="button_background_color_red">#EF5350</color> <!-- error red -->
+    <color name="pink_500">#FF9800</color>    <!-- accent orange -->
+    <color name="pink_700">#E65100</color>    <!-- dark orange -->
+
+    <color name="reset">#FF7043</color>       <!-- warm reset button -->
+    <color name="preset">#E3F2FD</color>      <!-- card/preset bg (light blue) -->
+    <color name="map">#CFD8DC</color>         <!-- map area light gray-blue -->
+    <color name="gridnumbers">#616161</color> <!-- medium gray -->
+    <color name="task">#0288D1</color>        <!-- cyan-blue task highlight -->
+    <color name="robot">#4DB6AC</color>       <!-- teal for robot -->
+    <color name="target">#FFB300</color>      <!-- amber for target -->
+</resources>

@@ -1,0 +1,84 @@
+package com.example.mdp_android.ui.home;
+
+import com.example.mdp_android.R;
+
+import android.view.LayoutInflater;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.TextView;
+import android.util.Log;
+import androidx.recyclerview.widget.RecyclerView;
+
+import java.util.Arrays;
+
+/**
+ * Tap an obstacle to trigger the placement dialog (handled via OnItemClickListener).
+ */
+public class RecyclerAdapter extends RecyclerView.Adapter<RecyclerAdapter.ViewHolder> {
+    private static final String TAG = "CustomAdapter";
+
+    private final String[] mDataSet;
+    private final boolean[] itemVisibility;
+
+    public interface OnItemClickListener {
+        void onItemClick(int adapterPosition, String labelText);
+    }
+    private OnItemClickListener clickListener;
+    public void setOnItemClickListener(OnItemClickListener l) { this.clickListener = l; }
+
+    public static class ViewHolder extends RecyclerView.ViewHolder {
+        private final TextView textView;
+
+        public ViewHolder(View v) {
+            super(v);
+            textView = v.findViewById(R.id.textView_obsData);
+        }
+
+        public TextView getTextView() { return textView; }
+    }
+
+    public RecyclerAdapter(String[] dataSet) {
+        mDataSet = dataSet;
+        itemVisibility = new boolean[dataSet.length];
+        Arrays.fill(itemVisibility, true);
+    }
+
+    @Override
+    public ViewHolder onCreateViewHolder(ViewGroup parent, int viewType) {
+        View v = LayoutInflater.from(parent.getContext())
+                .inflate(R.layout.obstacle_item, parent, false);
+        return new ViewHolder(v);
+    }
+
+    @Override
+    public void onBindViewHolder(ViewHolder vh, final int position) {
+        Log.d(TAG, "Element " + position + " set.");
+
+        vh.getTextView().setText(mDataSet[position]);
+        vh.getTextView().setVisibility(itemVisibility[position] ? View.VISIBLE : View.INVISIBLE);
+
+        vh.itemView.setOnClickListener(v -> {
+            if (clickListener != null && itemVisibility[vh.getAdapterPosition()]) {
+                String label = mDataSet[vh.getAdapterPosition()];
+                clickListener.onItemClick(vh.getAdapterPosition(), label);
+            }
+        });
+    }
+
+    @Override
+    public int getItemCount() {
+        return mDataSet.length;
+    }
+
+    public void setItemVisibility(int position, boolean isVisible) {
+        if (position >= 0 && position < itemVisibility.length) {
+            itemVisibility[position] = isVisible;
+            notifyItemChanged(position);
+        }
+    }
+
+    public void setAllVisibility(boolean v) {
+        Arrays.fill(itemVisibility, true);
+        notifyDataSetChanged();
+    }
+}
