@@ -183,7 +183,7 @@ Computer vision module using YOLOv8 for image symbol recognition.
 
 ### Android Application
 
-**Location**: *Code not yet pushed*
+**Location**:  `/android/app`
 
 The Android application module provides the graphical user interface and Bluetooth communication layer for controlling, visualizing, and monitoring the robot in real time.
 
