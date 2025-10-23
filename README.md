@@ -147,7 +147,20 @@ Computer vision module using YOLOv8 for image symbol recognition.
 
 **Location**: *Code not yet pushed*
 
-The Android application provides a user interface for controlling and monitoring the robot.
+The Android application module provides the graphical user interface and Bluetooth communication layer for controlling, visualizing, and monitoring the robot in real time.
+
+#### Key Files:
+- `HomeFragment.java`  – Main control interface handling robot updates, obstacle placement, and task initiation
+- `RpiController.java` – Handles JSON communication and message parsing between the app and Raspberry Pi
+- `Map.java` – Custom grid view for rendering robot, obstacles, and paths
+- `RecyclerAdapter.java` – Manages obstacle list items and visibility within the UI
+
+#### Key Features:
+- 20×20 grid-based visualization with real-time updates
+- Dialog-based obstacle placement via manual input (x, y, direction)
+- Automatic parsing and animation of received path data
+- Two-way Bluetooth communication with structured JSON handling
+
 
 ### STM
 
