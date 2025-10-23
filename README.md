@@ -69,6 +69,44 @@ SC2079-MDP-Group-27/
 │   ├── stm.py
 │   ├── camera.py
 │   └── rpi_config.py
+├── android/app/                              
+│   └── src/
+│       ├── main/
+│       │   ├── java/com/example/mdp_android/
+│       │   │   ├── controllers/            
+│       │   │   │   ├── BluetoothController.java          # Core Bluetooth connection logic
+│       │   │   │   ├── BluetoothControllerSingleton.java 
+│       │   │   │   ├── DeviceSingleton.java              
+│       │   │   │   ├── MessageRepository.java            # Central message handling and storage
+│       │   │   │   └── RpiController.java                # JSON communication with Raspberry Pi
+│       │   │   │
+│       │   │   ├── ui/                     # Application user interface and interaction logic
+│       │   │   │   ├── bluetooth/      
+│       │   │   │   │   ├── BluetoothFragment.java
+│       │   │   │   │   └── BluetoothViewModel.java
+│       │   │   │   │
+│       │   │   │   ├── grid/               # Map rendering and robot visualization
+│       │   │   │   │   └── Map.java
+│       │   │   │   │
+│       │   │   │   ├── home/              
+│       │   │   │   │   ├── HomeFragment.java
+│       │   │   │   │   ├── HomeViewModel.java
+│       │   │   │   │   └── RecyclerAdapter.java
+│       │   │   │   │
+│       │   │   │   ├── messages/           # Displays logs and communication messages
+│       │   │   │   │   ├── MessagesFragment.java
+│       │   │   │   │   └── MessagesViewModel.java
+│       │   │   │   │
+│       │   │   │   └── CustomSpinnerAdapter.java       
+│       │   │   │
+│       │   │   ├── Constants.java                      
+│       │   │   └── MainActivity.java               
+│       │   │
+│       │   ├── res/                                    # Layouts, icons, and drawable resources
+│       │   └── AndroidManifest.xml                     # App configuration and permissions
+│       │
+│       ├── androidTest/java/com/example/mdp_android/  
+│       └── test/java/com/example/mdp_android/     
 ├── captured_images/            # Captured image storage
 ├── images_result/              # Processed images
 ├── PC_client.py               # PC client main file
